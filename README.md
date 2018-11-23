@@ -1,6 +1,6 @@
-# WebGL Volume Raycaster
+# WebGL EWA Splatter
 
-An example of a volume raycaster using WebGL2.
-[Try it out online!](https://www.willusher.io/webgl-volume-raycaster/)
+An elliptical weighted average (EWA) surface splatter, implemented in WebGL.
+Note that this is still in progress.
 Uses [glMatrix](http://glmatrix.net/) for math operations.
 
