@@ -53,14 +53,17 @@ var vertShader =
 
 var fragShader =
 "#version 300 es\n" +
+"#define M_PI 3.1415926535897932384626433832795\n" +
 "out highp vec4 color;" +
 "in highp vec2 uv;" +
 "in highp vec3 normal;" +
 "void main(void) {" +
-	"if (length(uv) > 1.0) {" +
+	"highp float len = length(uv);" +
+	"if (len > 1.0) {" +
 		"discard;" +
 	"}" +
-	"color = vec4((normal + vec3(1)) / 2.0, 1);" +
+	"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len, 2.0)/2.0);" +
+	"color = vec4(0, 0, 1, opacity);" +
 "}";
 
 var gl = null;
@@ -230,11 +233,10 @@ window.onload = function(){
 	// Setup required OpenGL state for drawing the back faces and
 	// composting with the background color
 	gl.enable(gl.DEPTH_TEST);
-	/*
-	gl.cullFace(gl.FRONT);
-	gl.enable(gl.BLEND);
-	gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-	*/
+
+	//gl.enable(gl.BLEND);
+	//gl.blendFunc(gl.ONE, gl.ONE);
+
 	selectPointCloud();
 }
 
