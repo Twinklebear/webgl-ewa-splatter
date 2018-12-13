@@ -14,6 +14,7 @@ var vertShader =
 "layout(location=1) in vec3 splat_pos;" +
 "layout(location=2) in vec3 splat_normal;" +
 
+"uniform bool depth_prepass;" +
 "uniform highp vec3 eye_pos;" +
 "uniform mat4 proj_view;" +
 "uniform float splat_radius;" +
@@ -48,7 +49,12 @@ var vertShader =
 	"}" +
 	"uv = 2.0 * pos.xy;" +
 	"normal = splat_normal;" +
-	"gl_Position = proj_view * vec4(rot_mat * splat_radius * pos + splat_pos, 1);" +
+	"vec3 sp = rot_mat * splat_radius * pos + splat_pos;" +
+	"if (depth_prepass) {" +
+		"vec3 view_dir = normalize(splat_pos - eye_pos);" +
+		"sp += view_dir * 0.02;" +
+	"}" +
+	"gl_Position = proj_view * vec4(sp, 1.0);" +
 "}";
 
 var fragShader =
@@ -56,22 +62,20 @@ var fragShader =
 "#define M_PI 3.1415926535897932384626433832795\n" +
 
 "uniform bool depth_prepass;" +
-"out highp vec4 color;" +
 "in highp vec2 uv;" +
 "in highp vec3 normal;" +
+
+"out highp vec4 color;" +
 
 "void main(void) {" +
 	"highp float len = length(uv);" +
 	"if (len > 1.0) {" +
 		"discard;" +
 	"}" +
-	"if (depth_prepass) {" +
-		"gl_FragDepth = gl_FragCoord.z + 0.0001;" +
-	"} else {" +
-		"gl_FragDepth = gl_FragCoord.z;" +
+	"if (!depth_prepass) {" +
+		"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len * 5.0, 2.0)/2.0);" +
+		"color = vec4((normal + 1.0) * 0.5 * opacity, opacity);" +
 	"}" +
-	"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len, 2.0)/2.0);" +
-	"color = vec4((normal + 1.0) * 0.5 * opacity, opacity);" +
 "}";
 
 var quadVertShader =
@@ -106,6 +110,8 @@ var projView = null;
 var projViewLoc = null;
 var eyePosLoc = null;
 var depthPrepasLoc = null;
+var splatRadiusLoc = null;
+
 var tabFocused = true;
 var newPointCloudUpload = true;
 var splatShader = null;
@@ -113,6 +119,8 @@ var splatAccumColorTex = null;
 var splatDepthTex = null;
 var splatAccumFbo = null
 var normalizationPassShader = null;
+
+var splatRadiusSlider = null;
 
 // For the render time targetting we could do progressive
 // rendering of the splats, or render at a lower resolution
@@ -209,6 +217,8 @@ var selectPointCloud = function() {
 		var eye = [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
 		gl.uniform3fv(eyePosLoc, eye);
 
+		gl.uniform1f(splatRadiusLoc, splatRadiusSlider.value);
+
 		// Render depth prepass to filter occluded splats
 		gl.uniform1i(depthPrepassLoc, 1);
 		gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
@@ -245,6 +255,7 @@ var selectPointCloud = function() {
 window.onload = function(){
 	fillDatasetSelector();
 
+	splatRadiusSlider = document.getElementById("splatRadiusSlider");
 	var canvas = document.getElementById("glcanvas");
 	gl = canvas.getContext("webgl2");
 	if (!gl) {
@@ -300,8 +311,8 @@ window.onload = function(){
 	depthPrepassLoc = gl.getUniformLocation(splatShader, "depth_prepass");
 	projView = mat4.create();
 
-	gl.uniform1f(gl.getUniformLocation(splatShader, "splat_radius"), 0.25);
-
+	splatRadiusSlider.value = 0.25;
+	splatRadiusLoc = gl.getUniformLocation(splatShader, "splat_radius");
 
 	normalizationPassShader = compileShader(quadVertShader, normalizationFragShader);
 	gl.useProgram(normalizationPassShader);
