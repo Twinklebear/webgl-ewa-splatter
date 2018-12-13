@@ -12,7 +12,8 @@ var vertShader =
 "#version 300 es\n" +
 "layout(location=0) in vec3 pos;" +
 "layout(location=1) in highp vec4 splat_pos_radius;" +
-"layout(location=2) in highp vec4 splat_normal_color;" +
+"layout(location=2) in highp vec4 splat_normal;" +
+"layout(location=3) in highp vec4 splat_color_in;" +
 
 "uniform bool depth_prepass;" +
 "uniform highp vec3 eye_pos;" +
@@ -21,7 +22,7 @@ var vertShader =
 
 "out highp vec2 uv;" +
 "flat out highp vec3 normal;" +
-"flat out highp int splat_packed_color;" +
+"flat out highp vec3 splat_color;" +
 
 "mat3 rotation_matrix(vec3 a, float angle) {" +
 	"float c = cos(angle);" +
@@ -43,8 +44,8 @@ var vertShader =
 "void main(void) {" +
 	"mat3 rot_mat = mat3(1.0);" +
 	"vec3 quad_normal = vec3(0, 0, 1);" +
-	"vec3 splat_normal = normalize(splat_normal_color.xyz);" +
-	"splat_packed_color = floatBitsToInt(splat_normal_color.w);" +
+	"vec3 splat_normal = normalize(splat_normal.xyz);" +
+	"splat_color = splat_color_in.xyz;" +
 	"if (abs(splat_normal) != quad_normal) {" +
 		"vec3 rot_axis = normalize(cross(quad_normal, splat_normal));" +
 		"float rot_angle = acos(dot(quad_normal, splat_normal));" +
@@ -52,13 +53,7 @@ var vertShader =
 	"}" +
 	"uv = 2.0 * pos.xy;" +
 	"normal = splat_normal;" +
-	"vec3 sp = rot_mat * splat_pos_radius.w * radius_scale * pos + splat_pos_radius.xyz;" +
-	/*
-	"if (depth_prepass) {" +
-		"vec3 view_dir = normalize(splat_pos_radius.xyz - eye_pos);" +
-		"sp += view_dir * 0.02;" +
-	"}" +
-	*/
+	"vec3 sp = rot_mat * splat_pos_radius.w * radius_scale / 100.0 * pos + splat_pos_radius.xyz / 100.0;" +
 	"gl_Position = proj_view * vec4(sp, 1.0);" +
 "}";
 
@@ -67,35 +62,27 @@ var fragShader =
 "precision highp int;" +
 "precision highp float;\n" +
 "#define M_PI 3.1415926535897932384626433832795\n" +
-"#define RMASK 0xff000000\n" +
-"#define GMASK 0x00ff0000\n" +
-"#define BMASK 0x0000ff00\n" +
-"#define GET_RED(P) ((P & RMASK) >> 24)\n" +
-"#define GET_GREEN(P) ((P & GMASK) >> 16)\n" +
-"#define GET_BLUE(P) ((P & BMASK) >> 8)\n" +
 
 "uniform bool depth_prepass;" +
 "in highp vec2 uv;" +
 "flat in highp vec3 normal;" +
-"flat in highp int splat_packed_color;" +
+"flat in highp vec3 splat_color;" +
 
 "out highp vec4 color;" +
-"highp vec3 unpack_color(highp int c) {" +
-	"return vec3(float(GET_RED(c)), float(GET_GREEN(c)), float(GET_BLUE(c))) / 255.0;" +
-"}" +
+
 "void main(void) {" +
 	"highp float len = length(uv);" +
 	"if (len > 1.0) {" +
 		"discard;" +
 	"}" +
 	"if (depth_prepass) {" +
-		"gl_FragDepth = gl_FragCoord.z + 0.001;" +
+		"gl_FragDepth = gl_FragCoord.z + 0.0001;" +
 	"} else {" +
 		"gl_FragDepth = gl_FragCoord.z;" +
 	"}" +
 	"if (!depth_prepass) {" +
 		"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len * 5.0, 2.0)/2.0);" +
-		"color = vec4(unpack_color(0xff00ff00) * opacity, opacity);" +
+		"color = vec4(splat_color * opacity, opacity);" +
 	"}" +
 "}";
 
@@ -120,6 +107,8 @@ var normalizationFragShader =
 	"color = texture(splatBuf, gl_FragCoord.xy / canvas_dims);" +
 	"if (color.a != 0.0) {" +
 		"color.rgb = color.rgb / color.a;" +
+	"} else {" +
+		"color.rgb = vec3(0.2);" +
 	"}" +
 	"color.a = 1.0;" +
 "}";
@@ -176,7 +165,7 @@ var loadPointCloud = function(file, onload) {
 	//var m = file.match(fileRegex);
 	
 //	var url = "https://www.dl.dropboxusercontent.com/s/" + file + "?dl=1";
-	var url = "sphere.rsf";
+	var url = "Sankt_Johann_B2.rsf";
 	var req = new XMLHttpRequest();
 	var loadingProgressText = document.getElementById("loadingText");
 	var loadingProgressBar = document.getElementById("loadingProgressBar");
@@ -218,13 +207,18 @@ var selectPointCloud = function() {
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo);
 		gl.bufferData(gl.ARRAY_BUFFER, dataBuffer, gl.STATIC_DRAW);
 
+		var sizeofSurfel = 48;
 		gl.enableVertexAttribArray(1);
-		gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 0);
+		gl.vertexAttribPointer(1, 4, gl.FLOAT, false, sizeofSurfel, 0);
 		gl.vertexAttribDivisor(1, 1);
 
 		gl.enableVertexAttribArray(2);
-		gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 16);
+		gl.vertexAttribPointer(2, 4, gl.FLOAT, false, sizeofSurfel, 16);
 		gl.vertexAttribDivisor(2, 1);
+
+		gl.enableVertexAttribArray(3);
+		gl.vertexAttribPointer(3, 4, gl.FLOAT, false, sizeofSurfel, 32);
+		gl.vertexAttribDivisor(3, 1);
 
 		console.log(dataBuffer.length);
 
@@ -263,14 +257,14 @@ var selectPointCloud = function() {
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 			gl.colorMask(false, false, false, false);
 			gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
-				splatVerts.length / 3, dataBuffer.length / 32);
+				splatVerts.length / 3, dataBuffer.length / sizeofSurfel);
 
 			// Render splat pass to accumulate splats for each pixel
 			gl.uniform1i(depthPrepassLoc, 0);
 			gl.colorMask(true, true, true, true);
 			gl.depthMask(false);
 			gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
-				splatVerts.length / 3, dataBuffer.length / 32);
+				splatVerts.length / 3, dataBuffer.length / sizeofSurfel);
 
 			// Render normalization full screen shader pass to produce final image
 			gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);

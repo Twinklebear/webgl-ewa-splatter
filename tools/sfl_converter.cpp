@@ -6,17 +6,6 @@
 #include <fstream>
 #include <sfl.h>
 
-#define RMASK 0xff000000
-#define GMASK 0x00ff0000
-#define BMASK 0x0000ff00
-
-#define SET_RED(P, C) (P = ((P & ~RMASK) | (C << 24)))
-#define SET_GREEN(P, C) (P = ((P & ~GMASK) | (C << 16)))
-#define SET_BLUE(P, C) (P = ((P & ~BMASK) | (C << 8)))
-#define GET_RED(P) ((P & RMASK) >> 24)
-#define GET_GREEN(P) ((P & GMASK) >> 16)
-#define GET_BLUE(P) ((P & BMASK) >> 8)
-
 // The RAW surfel file format (.rsf) is simply a list of
 // surfels, where each surfel is specified by 8 floats (32 bytes):
 // x, y, z, radius, nx, ny, nz, color (rgba8)
@@ -36,8 +25,9 @@ T clamp(const T &x, const T &lo, const T &hi) {
 
 #pragma pack
 struct Surfel {
-	float x, y, z, radius, nx, ny, nz;
-	int color;
+	float x, y, z, radius;
+	float nx, ny, nz, pad;
+	float r, g, b, pad2;
 };
 
 int main(int argc, char **argv) {
@@ -95,17 +85,11 @@ int main(int argc, char **argv) {
 				break;
 			}
 			Surfel surf;
-			float r, g, b;
 			in->readSurfelPosition3(surf.x, surf.y, surf.z);
 			in->readSurfelNormal3(surf.nx, surf.ny, surf.nz);
 			in->readSurfelRadius(surf.radius);
-			in->readSurfelColorRGBf(sfl::DIFFUSE, r, g, b);
+			in->readSurfelColorRGBf(sfl::DIFFUSE, surf.r, surf.g, surf.b);
 			in->endSurfel();
-
-			surf.color = 0;
-			SET_RED(surf.color, static_cast<int>(clamp(r * 255.f, 0.f, 255.f)));
-			SET_GREEN(surf.color, static_cast<int>(clamp(g * 255.f, 0.f, 255.f)));
-			SET_BLUE(surf.color, static_cast<int>(clamp(b * 255.f, 0.f, 255.f)));
 
 			surfels.push_back(surf);
 		}
