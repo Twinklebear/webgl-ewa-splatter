@@ -1,3 +1,5 @@
 *.swp
 *.raw
+build/
+*.rsf
 

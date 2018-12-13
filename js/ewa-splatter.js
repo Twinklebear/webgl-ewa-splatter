@@ -11,16 +11,17 @@ var splatVbo = [];
 var vertShader =
 "#version 300 es\n" +
 "layout(location=0) in vec3 pos;" +
-"layout(location=1) in vec3 splat_pos;" +
-"layout(location=2) in vec3 splat_normal;" +
+"layout(location=1) in highp vec4 splat_pos_radius;" +
+"layout(location=2) in highp vec4 splat_normal_color;" +
 
 "uniform bool depth_prepass;" +
 "uniform highp vec3 eye_pos;" +
 "uniform mat4 proj_view;" +
-"uniform float splat_radius;" +
+"uniform float radius_scale;" +
 
 "out highp vec2 uv;" +
-"out highp vec3 normal;" +
+"flat out highp vec3 normal;" +
+"flat out highp int splat_packed_color;" +
 
 "mat3 rotation_matrix(vec3 a, float angle) {" +
 	"float c = cos(angle);" +
@@ -42,6 +43,8 @@ var vertShader =
 "void main(void) {" +
 	"mat3 rot_mat = mat3(1.0);" +
 	"vec3 quad_normal = vec3(0, 0, 1);" +
+	"vec3 splat_normal = normalize(splat_normal_color.xyz);" +
+	"splat_packed_color = floatBitsToInt(splat_normal_color.w);" +
 	"if (abs(splat_normal) != quad_normal) {" +
 		"vec3 rot_axis = normalize(cross(quad_normal, splat_normal));" +
 		"float rot_angle = acos(dot(quad_normal, splat_normal));" +
@@ -49,32 +52,50 @@ var vertShader =
 	"}" +
 	"uv = 2.0 * pos.xy;" +
 	"normal = splat_normal;" +
-	"vec3 sp = rot_mat * splat_radius * pos + splat_pos;" +
+	"vec3 sp = rot_mat * splat_pos_radius.w * radius_scale * pos + splat_pos_radius.xyz;" +
+	/*
 	"if (depth_prepass) {" +
-		"vec3 view_dir = normalize(splat_pos - eye_pos);" +
+		"vec3 view_dir = normalize(splat_pos_radius.xyz - eye_pos);" +
 		"sp += view_dir * 0.02;" +
 	"}" +
+	*/
 	"gl_Position = proj_view * vec4(sp, 1.0);" +
 "}";
 
 var fragShader =
 "#version 300 es\n" +
+"precision highp int;" +
+"precision highp float;\n" +
 "#define M_PI 3.1415926535897932384626433832795\n" +
+"#define RMASK 0xff000000\n" +
+"#define GMASK 0x00ff0000\n" +
+"#define BMASK 0x0000ff00\n" +
+"#define GET_RED(P) ((P & RMASK) >> 24)\n" +
+"#define GET_GREEN(P) ((P & GMASK) >> 16)\n" +
+"#define GET_BLUE(P) ((P & BMASK) >> 8)\n" +
 
 "uniform bool depth_prepass;" +
 "in highp vec2 uv;" +
-"in highp vec3 normal;" +
+"flat in highp vec3 normal;" +
+"flat in highp int splat_packed_color;" +
 
 "out highp vec4 color;" +
-
+"highp vec3 unpack_color(highp int c) {" +
+	"return vec3(float(GET_RED(c)), float(GET_GREEN(c)), float(GET_BLUE(c))) / 255.0;" +
+"}" +
 "void main(void) {" +
 	"highp float len = length(uv);" +
 	"if (len > 1.0) {" +
 		"discard;" +
 	"}" +
+	"if (depth_prepass) {" +
+		"gl_FragDepth = gl_FragCoord.z + 0.001;" +
+	"} else {" +
+		"gl_FragDepth = gl_FragCoord.z;" +
+	"}" +
 	"if (!depth_prepass) {" +
 		"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len * 5.0, 2.0)/2.0);" +
-		"color = vec4((normal + 1.0) * 0.5 * opacity, opacity);" +
+		"color = vec4(unpack_color(0xff00ff00) * opacity, opacity);" +
 	"}" +
 "}";
 
@@ -110,7 +131,10 @@ var projView = null;
 var projViewLoc = null;
 var eyePosLoc = null;
 var depthPrepasLoc = null;
-var splatRadiusLoc = null;
+var splatRadiusScaleLoc = null;
+
+var vao = null;
+var splatAttribVbo = null;
 
 var tabFocused = true;
 var newPointCloudUpload = true;
@@ -149,35 +173,34 @@ var generateFibonacciSphere = function(radius, npoints) {
 }
 
 var loadPointCloud = function(file, onload) {
-	/*
-	var m = file.match(fileRegex);
-	var volDims = [parseInt(m[2]), parseInt(m[3]), parseInt(m[4])];
+	//var m = file.match(fileRegex);
 	
-	var url = "https://www.dl.dropboxusercontent.com/s/" + file + "?dl=1";
+//	var url = "https://www.dl.dropboxusercontent.com/s/" + file + "?dl=1";
+	var url = "sphere.rsf";
 	var req = new XMLHttpRequest();
 	var loadingProgressText = document.getElementById("loadingText");
 	var loadingProgressBar = document.getElementById("loadingProgressBar");
 
-	loadingProgressText.innerHTML = "Loading Volume";
+	loadingProgressText.innerHTML = "Loading Dataset";
 	loadingProgressBar.setAttribute("style", "width: 0%");
 
 	req.open("GET", url, true);
 	req.responseType = "arraybuffer";
 	req.onprogress = function(evt) {
-		var vol_size = volDims[0] * volDims[1] * volDims[2];
-		var percent = evt.loaded / vol_size * 100;
+		var percent = evt.loaded;// / vol_size * 100;
 		loadingProgressBar.setAttribute("style", "width: " + percent.toFixed(2) + "%");
 	};
 	req.onerror = function(evt) {
-		loadingProgressText.innerHTML = "Error Loading Volume";
+		loadingProgressText.innerHTML = "Error Loading Dataset";
 		loadingProgressBar.setAttribute("style", "width: 0%");
 	};
 	req.onload = function(evt) {
-		loadingProgressText.innerHTML = "Loaded Volume";
+		loadingProgressText.innerHTML = "Loaded Dataset";
 		loadingProgressBar.setAttribute("style", "width: 100%");
 		var dataBuffer = req.response;
 		if (dataBuffer) {
 			dataBuffer = new Uint8Array(dataBuffer);
+			console.log(dataBuffer);
 			onload(file, dataBuffer);
 		} else {
 			alert("Unable to load buffer properly from volume?");
@@ -185,71 +208,88 @@ var loadPointCloud = function(file, onload) {
 		}
 	};
 	req.send();
-	*/
 }
 
 var selectPointCloud = function() {
 	var selection = document.getElementById("datasets").value;
 
-	setInterval(function() {
-		// Save them some battery if they're not viewing the tab
-		if (document.hidden) {
-			return;
-		}
-		var startTime = new Date();
+	loadPointCloud("", function(file, dataBuffer) {
+		gl.bindVertexArray(vao);
+		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo);
+		gl.bufferData(gl.ARRAY_BUFFER, dataBuffer, gl.STATIC_DRAW);
 
-		gl.useProgram(splatShader);
+		gl.enableVertexAttribArray(1);
+		gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 0);
+		gl.vertexAttribDivisor(1, 1);
 
-		gl.enable(gl.DEPTH_TEST);
-		gl.enable(gl.BLEND);
-		gl.blendFunc(gl.ONE, gl.ONE);
+		gl.enableVertexAttribArray(2);
+		gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 16);
+		gl.vertexAttribDivisor(2, 1);
 
-		gl.clearDepth(1.0);
-		gl.clearColor(0.0, 0.0, 0.0, 0.0);
+		console.log(dataBuffer.length);
 
-		// Reset the sampling rate and camera for new volumes
-		if (newPointCloudUpload) {
-			camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
-		}
-		projView = mat4.mul(projView, proj, camera.camera);
-		gl.uniformMatrix4fv(projViewLoc, false, projView);
+		setInterval(function() {
+			// Save them some battery if they're not viewing the tab
+			if (document.hidden) {
+				return;
+			}
+			var startTime = new Date();
 
-		var eye = [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
-		gl.uniform3fv(eyePosLoc, eye);
+			gl.useProgram(splatShader);
 
-		gl.uniform1f(splatRadiusLoc, splatRadiusSlider.value);
+			gl.enable(gl.DEPTH_TEST);
+			gl.enable(gl.BLEND);
+			gl.blendFunc(gl.ONE, gl.ONE);
 
-		// Render depth prepass to filter occluded splats
-		gl.uniform1i(depthPrepassLoc, 1);
-		gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
-		gl.depthMask(true);
-		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-		gl.colorMask(false, false, false, false);
-		gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, splatVbo.length / 6);
+			gl.clearDepth(1.0);
+			gl.clearColor(0.0, 0.0, 0.0, 0.0);
 
-		// Render splat pass to accumulate splats for each pixel
-		gl.uniform1i(depthPrepassLoc, 0);
-		gl.colorMask(true, true, true, true);
-		gl.depthMask(false);
-		gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, splatVbo.length / 6);
+			// Reset the sampling rate and camera for new volumes
+			if (newPointCloudUpload) {
+				camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
+			}
+			projView = mat4.mul(projView, proj, camera.camera);
+			gl.uniformMatrix4fv(projViewLoc, false, projView);
 
-		// Render normalization full screen shader pass to produce final image
-		gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);
-		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-		gl.disable(gl.BLEND);
-		gl.useProgram(normalizationPassShader);
-		gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+			var eye = [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
+			gl.uniform3fv(eyePosLoc, eye);
 
-		// Wait for rendering to actually finish so we can time it
-		gl.finish();
-		var endTime = new Date();
-		var renderTime = endTime - startTime;
-		var targetSamplingRate = renderTime / targetFrameTime;
+			gl.uniform1f(splatRadiusScaleLoc, splatRadiusSlider.value);
 
-		newPointCloudUpload = false;
-		startTime = endTime;
-	}, targetFrameTime);
+			// Render depth prepass to filter occluded splats
+			gl.uniform1i(depthPrepassLoc, 1);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
+			gl.depthMask(true);
+			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+			gl.colorMask(false, false, false, false);
+			gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
+				splatVerts.length / 3, dataBuffer.length / 32);
+
+			// Render splat pass to accumulate splats for each pixel
+			gl.uniform1i(depthPrepassLoc, 0);
+			gl.colorMask(true, true, true, true);
+			gl.depthMask(false);
+			gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
+				splatVerts.length / 3, dataBuffer.length / 32);
+
+			// Render normalization full screen shader pass to produce final image
+			gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+			gl.disable(gl.BLEND);
+			gl.useProgram(normalizationPassShader);
+			gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+			// Wait for rendering to actually finish so we can time it
+			gl.finish();
+			var endTime = new Date();
+			var renderTime = endTime - startTime;
+			var targetSamplingRate = renderTime / targetFrameTime;
+
+			newPointCloudUpload = false;
+			startTime = endTime;
+		}, targetFrameTime);
+	});
 }
 
 window.onload = function(){
@@ -271,14 +311,14 @@ window.onload = function(){
 	HEIGHT = canvas.getAttribute("height");
 
 	proj = mat4.perspective(mat4.create(), 60 * Math.PI / 180.0,
-		WIDTH / HEIGHT, 0.1, 100);
+		WIDTH / HEIGHT, 1, 500);
 
 	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
 
 	// Register mouse and touch listeners
 	registerEventHandlers(canvas);
 
-	var vao = gl.createVertexArray();
+	vao = gl.createVertexArray();
 	gl.bindVertexArray(vao);
 
 	// Create the instanced quad buffer we'll use to make the transformed splats
@@ -290,18 +330,8 @@ window.onload = function(){
 	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
 	// Create the splat attribute buffer for the per-splat instance data
-	generateFibonacciSphere(2.0, 2000);
-	var splatAttribVbo = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo);
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(splatVbo), gl.STATIC_DRAW);
-
-	gl.enableVertexAttribArray(1);
-	gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 6 * 4, 0);
-	gl.vertexAttribDivisor(1, 1);
-
-	gl.enableVertexAttribArray(2);
-	gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
-	gl.vertexAttribDivisor(2, 1);
+	//generateFibonacciSphere(2.0, 2000);
+	splatAttribVbo = gl.createBuffer();
 
 	splatShader = compileShader(vertShader, fragShader);
 	gl.useProgram(splatShader);
@@ -311,8 +341,8 @@ window.onload = function(){
 	depthPrepassLoc = gl.getUniformLocation(splatShader, "depth_prepass");
 	projView = mat4.create();
 
-	splatRadiusSlider.value = 0.25;
-	splatRadiusLoc = gl.getUniformLocation(splatShader, "splat_radius");
+	splatRadiusSlider.value = 1;
+	splatRadiusScaleLoc = gl.getUniformLocation(splatShader, "radius_scale");
 
 	normalizationPassShader = compileShader(quadVertShader, normalizationFragShader);
 	gl.useProgram(normalizationPassShader);
@@ -321,7 +351,7 @@ window.onload = function(){
 	// Setup the render targets for the splat rendering pass
 	splatDepthTex = gl.createTexture();
 	gl.bindTexture(gl.TEXTURE_2D, splatDepthTex);
-	gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24 , WIDTH, HEIGHT);
+	gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT32F, WIDTH, HEIGHT);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
