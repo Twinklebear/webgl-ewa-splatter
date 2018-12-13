@@ -279,7 +279,7 @@ window.onload = function(){
 	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
 	// Create the splat attribute buffer for the per-splat instance data
-	generateFibonacciSphere(2.0, 1500);
+	generateFibonacciSphere(2.0, 2000);
 	var splatAttribVbo = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(splatVbo), gl.STATIC_DRAW);
@@ -300,7 +300,7 @@ window.onload = function(){
 	depthPrepassLoc = gl.getUniformLocation(splatShader, "depth_prepass");
 	projView = mat4.create();
 
-	gl.uniform1f(gl.getUniformLocation(splatShader, "splat_radius"), 0.28);
+	gl.uniform1f(gl.getUniformLocation(splatShader, "splat_radius"), 0.25);
 
 
 	normalizationPassShader = compileShader(quadVertShader, normalizationFragShader);
