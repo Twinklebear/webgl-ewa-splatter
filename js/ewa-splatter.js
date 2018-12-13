@@ -56,9 +56,7 @@ var fragShader =
 "#define M_PI 3.1415926535897932384626433832795\n" +
 
 "uniform bool depth_prepass;" +
-
 "out highp vec4 color;" +
-
 "in highp vec2 uv;" +
 "in highp vec3 normal;" +
 
@@ -73,7 +71,32 @@ var fragShader =
 		"gl_FragDepth = gl_FragCoord.z;" +
 	"}" +
 	"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len, 2.0)/2.0);" +
-	"color = vec4(normal * 0.5, opacity);" +
+	"color = vec4((normal + 1.0) * 0.5 * opacity, opacity);" +
+"}";
+
+var quadVertShader =
+"#version 300 es\n" +
+"const vec4 pos[4] = vec4[4](" +
+	"vec4(-1, 1, 0.5, 1)," +
+	"vec4(-1, -1, 0.5, 1)," +
+	"vec4(1, 1, 0.5, 1)," +
+	"vec4(1, -1, 0.5, 1)" +
+");" +
+"void main(void){" +
+	"gl_Position = pos[gl_VertexID];" +
+"}";
+
+var normalizationFragShader =
+"#version 300 es\n" +
+"uniform sampler2D splatBuf;" +
+"uniform highp vec2 canvas_dims;" +
+"out highp vec4 color;" +
+"void main(void){ " +
+	"color = texture(splatBuf, gl_FragCoord.xy / canvas_dims);" +
+	"if (color.a != 0.0) {" +
+		"color.rgb = color.rgb / color.a;" +
+	"}" +
+	"color.a = 1.0;" +
 "}";
 
 var gl = null;
@@ -85,6 +108,12 @@ var eyePosLoc = null;
 var depthPrepasLoc = null;
 var tabFocused = true;
 var newPointCloudUpload = true;
+var splatShader = null;
+var splatAccumColorTex = null;
+var splatDepthTex = null;
+var splatAccumFbo = null
+var normalizationPassShader = null;
+
 // For the render time targetting we could do progressive
 // rendering of the splats, or render at a lower resolution
 var targetFrameTime = 32;
@@ -162,16 +191,14 @@ var selectPointCloud = function() {
 		}
 		var startTime = new Date();
 
-		// Setup required OpenGL state for drawing the back faces and
-		// composting with the background color
-		gl.enable(gl.DEPTH_TEST);
+		gl.useProgram(splatShader);
 
+		gl.enable(gl.DEPTH_TEST);
 		gl.enable(gl.BLEND);
 		gl.blendFunc(gl.ONE, gl.ONE);
 
 		gl.clearDepth(1.0);
 		gl.clearColor(0.0, 0.0, 0.0, 0.0);
-		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 		// Reset the sampling rate and camera for new volumes
 		if (newPointCloudUpload) {
@@ -183,15 +210,27 @@ var selectPointCloud = function() {
 		var eye = [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
 		gl.uniform3fv(eyePosLoc, eye);
 
+		// Render depth prepass to filter occluded splats
 		gl.uniform1i(depthPrepassLoc, 1);
-		gl.colorMask(false, false, false, false);
+		gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
 		gl.depthMask(true);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		gl.colorMask(false, false, false, false);
 		gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, splatVbo.length / 6);
 
+		// Render splat pass to accumulate splats for each pixel
 		gl.uniform1i(depthPrepassLoc, 0);
 		gl.colorMask(true, true, true, true);
 		gl.depthMask(false);
 		gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, splatVbo.length / 6);
+
+		// Render normalization full screen shader pass to produce final image
+		gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);
+		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		gl.disable(gl.BLEND);
+		gl.useProgram(normalizationPassShader);
+		gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
 		// Wait for rendering to actually finish so we can time it
 		gl.finish();
@@ -213,6 +252,11 @@ window.onload = function(){
 		alert("Unable to initialize WebGL2. Your browser may not support it");
 		return;
 	}
+	if (!getGLExtension("OES_texture_float_linear") || !getGLExtension("EXT_color_buffer_float")) {
+		alert("Required WebGL extensions missing, aborting");
+		return;
+	}
+
 	WIDTH = canvas.getAttribute("width");
 	HEIGHT = canvas.getAttribute("height");
 
@@ -236,7 +280,7 @@ window.onload = function(){
 	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
 	// Create the splat attribute buffer for the per-splat instance data
-	generateTestSphere(3.0, 12, 12);
+	generateTestSphere(2.0, 70, 60);
 	var splatAttribVbo = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(splatVbo), gl.STATIC_DRAW);
@@ -249,15 +293,44 @@ window.onload = function(){
 	gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
 	gl.vertexAttribDivisor(2, 1);
 
-	var shader = compileShader(vertShader, fragShader);
-	gl.useProgram(shader);
+	splatShader = compileShader(vertShader, fragShader);
+	gl.useProgram(splatShader);
 
-	eyePosLoc = gl.getUniformLocation(shader, "eye_pos");
-	projViewLoc = gl.getUniformLocation(shader, "proj_view");
-	depthPrepassLoc = gl.getUniformLocation(shader, "depth_prepass");
+	eyePosLoc = gl.getUniformLocation(splatShader, "eye_pos");
+	projViewLoc = gl.getUniformLocation(splatShader, "proj_view");
+	depthPrepassLoc = gl.getUniformLocation(splatShader, "depth_prepass");
 	projView = mat4.create();
 
-	gl.uniform1f(gl.getUniformLocation(shader, "splat_radius"), 0.5);
+	gl.uniform1f(gl.getUniformLocation(splatShader, "splat_radius"), 0.2);
+
+
+	normalizationPassShader = compileShader(quadVertShader, normalizationFragShader);
+	gl.useProgram(normalizationPassShader);
+	gl.uniform2f(gl.getUniformLocation(normalizationPassShader, "canvas_dims"), WIDTH, HEIGHT);
+
+	// Setup the render targets for the splat rendering pass
+	splatDepthTex = gl.createTexture();
+	gl.bindTexture(gl.TEXTURE_2D, splatDepthTex);
+	gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24 , WIDTH, HEIGHT);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+	splatAccumColorTex = gl.createTexture();
+	gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);
+	gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, WIDTH, HEIGHT);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+	splatAccumFbo = gl.createFramebuffer();
+	gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
+	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+		gl.TEXTURE_2D, splatAccumColorTex, 0);
+	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT,
+		gl.TEXTURE_2D, splatDepthTex, 0);
 
 	selectPointCloud();
 }
@@ -445,5 +518,13 @@ var compileShader = function(vert, frag){
 		return null;
 	}
 	return program;
+}
+
+var getGLExtension = function(ext) {
+	if (!gl.getExtension(ext)) {
+		alert("Missing " + ext + " WebGL extension");
+		return false;
+	}
+	return true;
 }
 
