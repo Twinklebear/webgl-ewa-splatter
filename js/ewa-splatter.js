@@ -125,19 +125,18 @@ var pointClouds = {
 	"Test Sphere": "test-sphere",
 };
 
-// Generate points on a sphere with some radius, taking nphi samples
-// long phi and ntheta samples along theta
-var generateTestSphere = function(radius, nphi, ntheta) {
-	for (var i = 0; i < nphi; ++i) {
-		for (var j = 0; j <= ntheta; ++j) {
-			var phi = (i / nphi) * 2.0 * Math.PI;
-			var theta = (j / ntheta) * Math.PI;
-			var x = Math.sin(theta) * Math.cos(phi);
-			var y = Math.sin(theta) * Math.sin(phi);
-			var z = Math.cos(theta);
-			splatVbo.push(radius * x, radius * y, radius * z);
-			splatVbo.push(x, y, z);
-		}
+// Generate points on a sphere using the Fibonacci sphere
+var generateFibonacciSphere = function(radius, npoints) {
+	var increment = Math.PI * (3.0 - Math.sqrt(5.0));
+	var offset = 2.0 / npoints;
+	for (var i = 0; i < npoints; ++i) {
+		var y = ((i * offset) - 1) + offset / 2;
+		var r = Math.sqrt(1.0 - y * y);
+		var phi = i * increment;
+		var x = r * Math.cos(phi);
+		var z = r * Math.sin(phi);
+		splatVbo.push(radius * x, radius * y, radius * z);
+		splatVbo.push(x, y, z);
 	}
 }
 
@@ -280,7 +279,7 @@ window.onload = function(){
 	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
 	// Create the splat attribute buffer for the per-splat instance data
-	generateTestSphere(2.0, 70, 60);
+	generateFibonacciSphere(2.0, 1500);
 	var splatAttribVbo = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(splatVbo), gl.STATIC_DRAW);
@@ -301,7 +300,7 @@ window.onload = function(){
 	depthPrepassLoc = gl.getUniformLocation(splatShader, "depth_prepass");
 	projView = mat4.create();
 
-	gl.uniform1f(gl.getUniformLocation(splatShader, "splat_radius"), 0.2);
+	gl.uniform1f(gl.getUniformLocation(splatShader, "splat_radius"), 0.28);
 
 
 	normalizationPassShader = compileShader(quadVertShader, normalizationFragShader);
