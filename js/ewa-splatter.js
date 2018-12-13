@@ -54,16 +54,26 @@ var vertShader =
 var fragShader =
 "#version 300 es\n" +
 "#define M_PI 3.1415926535897932384626433832795\n" +
+
+"uniform bool depth_prepass;" +
+
 "out highp vec4 color;" +
+
 "in highp vec2 uv;" +
 "in highp vec3 normal;" +
+
 "void main(void) {" +
 	"highp float len = length(uv);" +
 	"if (len > 1.0) {" +
 		"discard;" +
 	"}" +
+	"if (depth_prepass) {" +
+		"gl_FragDepth = gl_FragCoord.z + 0.0001;" +
+	"} else {" +
+		"gl_FragDepth = gl_FragCoord.z;" +
+	"}" +
 	"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len, 2.0)/2.0);" +
-	"color = vec4(0, 0, 1, opacity);" +
+	"color = vec4(normal * 0.5, opacity);" +
 "}";
 
 var gl = null;
@@ -72,6 +82,7 @@ var camera = null;
 var projView = null;
 var projViewLoc = null;
 var eyePosLoc = null;
+var depthPrepasLoc = null;
 var tabFocused = true;
 var newPointCloudUpload = true;
 // For the render time targetting we could do progressive
@@ -150,8 +161,17 @@ var selectPointCloud = function() {
 			return;
 		}
 		var startTime = new Date();
+
+		// Setup required OpenGL state for drawing the back faces and
+		// composting with the background color
+		gl.enable(gl.DEPTH_TEST);
+
+		gl.enable(gl.BLEND);
+		gl.blendFunc(gl.ONE, gl.ONE);
+
+		gl.clearDepth(1.0);
 		gl.clearColor(0.0, 0.0, 0.0, 0.0);
-		gl.clear(gl.COLOR_BUFFER_BIT);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 		// Reset the sampling rate and camera for new volumes
 		if (newPointCloudUpload) {
@@ -163,6 +183,14 @@ var selectPointCloud = function() {
 		var eye = [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
 		gl.uniform3fv(eyePosLoc, eye);
 
+		gl.uniform1i(depthPrepassLoc, 1);
+		gl.colorMask(false, false, false, false);
+		gl.depthMask(true);
+		gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, splatVbo.length / 6);
+
+		gl.uniform1i(depthPrepassLoc, 0);
+		gl.colorMask(true, true, true, true);
+		gl.depthMask(false);
 		gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, splatVbo.length / 6);
 
 		// Wait for rendering to actually finish so we can time it
@@ -226,16 +254,10 @@ window.onload = function(){
 
 	eyePosLoc = gl.getUniformLocation(shader, "eye_pos");
 	projViewLoc = gl.getUniformLocation(shader, "proj_view");
+	depthPrepassLoc = gl.getUniformLocation(shader, "depth_prepass");
 	projView = mat4.create();
 
 	gl.uniform1f(gl.getUniformLocation(shader, "splat_radius"), 0.5);
-
-	// Setup required OpenGL state for drawing the back faces and
-	// composting with the background color
-	gl.enable(gl.DEPTH_TEST);
-
-	//gl.enable(gl.BLEND);
-	//gl.blendFunc(gl.ONE, gl.ONE);
 
 	selectPointCloud();
 }
