@@ -82,13 +82,14 @@ var fragShader =
 	"if (depth_prepass) {" +
 		// TODO: We want the depth epsilon to be bigger closer to you but smaller
 		// farther away
-		"gl_FragDepth = gl_FragCoord.z + 0.0015;" +
+		"gl_FragDepth = gl_FragCoord.z + 0.002;" +
 	"} else {" +
 		"gl_FragDepth = gl_FragCoord.z;" +
 	"}" +
 	"if (!depth_prepass) {" +
 		"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len * 5.0, 2.0)/2.0);" +
 		"vec3 light_dir = normalize(vec3(0.5, 0.5, 1));" +
+		"vec3 light_dir2 = normalize(vec3(-0.5, 0.25, -0.5));" +
 		"float intensity = 0.25;" +
 		"if (dot(light_dir, normal) > 0.0) {" +
 			"intensity += dot(light_dir, normal);" +
@@ -97,6 +98,9 @@ var fragShader =
 			"if (ndoth > 0.0) {" +
 				"intensity += pow(ndoth, 40.0);" +
 			"}" +
+		"}" +
+		"if (dot(light_dir2, normal) > 0.0) {" +
+			"intensity += dot(light_dir2, normal) * 0.5;" +
 		"}" +
 		"color = vec4(intensity * splat_color * opacity, opacity);" +
 	"}" +
@@ -135,7 +139,7 @@ var normalizationFragShader =
 	"if (color.a != 0.0) {" +
 		"color.rgb = color.rgb / color.a;" +
 	"} else {" +
-		"color.rgb = vec3(uv.y * 0.9, 0.45, 0.9 - uv.y * 0.9);" +
+		"color.rgb = vec3(uv.y * 0.7, uv.y * 0.7, 0.6);" +// - uv.y * 0.9);" +
 	"}" +
 	"color.r = linear_to_srgb(color.r);" +
 	"color.g = linear_to_srgb(color.g);" +
@@ -179,23 +183,27 @@ const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 var pointClouds = {
 	"Dinosaur": {
 		url: "erx9893x0olqbfq/dinosaur.rsf",
-		scale: 1.0/20.0,
+		scale: 1.0/30.0,
 		size: 2697312,
+		zoom_start: -30,
 	},
 	"Man": {
 		url: "yfk9l8rweuk2m51/male.rsf",
-		scale: 1.0/20.0,
+		scale: 1.0/30.0,
 		size: 7110624,
+		zoom_start: -40,
 	},
 	"Igea": {
 		url: "v0xl67jgo4x5pxd/igea.rsf",
-		scale: 1.0/20.0,
-		size: 6448560
+		scale: 1.0/30.0,
+		size: 6448560,
+		zoom_start: -20,
 	},
 	"Sankt Johann": {
 		url: "7db4xlbhnl2muzv/Sankt_Johann_B2.rsf",
 		scale: 1.0/200.0,
 		size: 11576112,
+		zoom_start: -40,
 	}
 };
 
@@ -281,7 +289,12 @@ var selectPointCloud = function() {
 
 				// Reset the sampling rate and camera for new volumes
 				if (newPointCloudUpload) {
-					camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
+					camera = new ArcballCamera(center, 100, [WIDTH, HEIGHT]);
+					camera.zoom(surfelDataset.zoom_start);
+					// Pan the man down some
+					if (surfelDataset.url == pointClouds["Man"].url) {
+						camera.pan([0, -HEIGHT/2]);
+					}
 				}
 				projView = mat4.mul(projView, proj, camera.camera);
 
@@ -349,7 +362,7 @@ window.onload = function(){
 	HEIGHT = canvas.getAttribute("height");
 
 	proj = mat4.perspective(mat4.create(), 60 * Math.PI / 180.0,
-		WIDTH / HEIGHT, 1, 500);
+		WIDTH / HEIGHT, 1, 50);
 
 	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
 
