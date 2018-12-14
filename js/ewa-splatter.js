@@ -19,6 +19,7 @@ var vertShader =
 "uniform highp vec3 eye_pos;" +
 "uniform mat4 proj_view;" +
 "uniform float radius_scale;" +
+"uniform float scaling;" +
 
 "out highp vec2 uv;" +
 "out highp vec3 eye_dir;" +
@@ -53,7 +54,8 @@ var vertShader =
 	"}" +
 	"uv = 2.0 * pos.xy;" +
 	"normal = splat_normal;" +
-	"vec3 sp = rot_mat * splat_pos_radius.w * radius_scale / 100.0 * pos + splat_pos_radius.xyz / 100.0;" +
+	"vec3 sp = rot_mat * splat_pos_radius.w * radius_scale * scaling * pos " +
+				"+ splat_pos_radius.xyz * scaling;" +
 	"eye_dir = sp - eye_pos;" +
 	"gl_Position = proj_view * vec4(sp, 1.0);" +
 "}";
@@ -149,6 +151,7 @@ var projViewLoc = null;
 var eyePosLoc = null;
 var depthPrepasLoc = null;
 var splatRadiusScaleLoc = null;
+var scalingLoc = null;
 
 var vao = null;
 var splatAttribVbo = null;
@@ -161,6 +164,9 @@ var splatDepthTex = null;
 var splatAccumFbo = null
 var normalizationPassShader = null;
 
+var surfelBuffer = null;
+var surfelDataset = null;
+
 var splatRadiusSlider = null;
 
 // For the render time targetting we could do progressive
@@ -171,29 +177,30 @@ var HEIGHT = 480;
 const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 
 var pointClouds = {
-	"Test Sphere": "test-sphere",
+	"Dinosaur": {
+		url: "erx9893x0olqbfq/dinosaur.rsf",
+		scale: 1.0/20.0,
+		size: 2697312,
+	},
+	"Man": {
+		url: "yfk9l8rweuk2m51/male.rsf",
+		scale: 1.0/20.0,
+		size: 7110624,
+	},
+	"Igea": {
+		url: "v0xl67jgo4x5pxd/igea.rsf",
+		scale: 1.0/20.0,
+		size: 6448560
+	},
+	"Sankt Johann": {
+		url: "7db4xlbhnl2muzv/Sankt_Johann_B2.rsf",
+		scale: 1.0/200.0,
+		size: 11576112,
+	}
 };
 
-// Generate points on a sphere using the Fibonacci sphere
-var generateFibonacciSphere = function(radius, npoints) {
-	var increment = Math.PI * (3.0 - Math.sqrt(5.0));
-	var offset = 2.0 / npoints;
-	for (var i = 0; i < npoints; ++i) {
-		var y = ((i * offset) - 1) + offset / 2;
-		var r = Math.sqrt(1.0 - y * y);
-		var phi = i * increment;
-		var x = r * Math.cos(phi);
-		var z = r * Math.sin(phi);
-		splatVbo.push(radius * x, radius * y, radius * z);
-		splatVbo.push(x, y, z);
-	}
-}
-
-var loadPointCloud = function(file, onload) {
-	//var m = file.match(fileRegex);
-	
-//	var url = "https://www.dl.dropboxusercontent.com/s/" + file + "?dl=1";
-	var url = "Sankt_Johann_B2.rsf";
+var loadPointCloud = function(dataset, onload) {
+	var url = "https://www.dl.dropboxusercontent.com/s/" + dataset.url + "?dl=1";
 	var req = new XMLHttpRequest();
 	var loadingProgressText = document.getElementById("loadingText");
 	var loadingProgressBar = document.getElementById("loadingProgressBar");
@@ -204,7 +211,7 @@ var loadPointCloud = function(file, onload) {
 	req.open("GET", url, true);
 	req.responseType = "arraybuffer";
 	req.onprogress = function(evt) {
-		var percent = evt.loaded;// / vol_size * 100;
+		var percent = evt.loaded / dataset.size * 100;
 		loadingProgressBar.setAttribute("style", "width: " + percent.toFixed(2) + "%");
 	};
 	req.onerror = function(evt) {
@@ -217,8 +224,7 @@ var loadPointCloud = function(file, onload) {
 		var dataBuffer = req.response;
 		if (dataBuffer) {
 			dataBuffer = new Uint8Array(dataBuffer);
-			console.log(dataBuffer);
-			onload(file, dataBuffer);
+			onload(dataset, dataBuffer);
 		} else {
 			alert("Unable to load buffer properly from volume?");
 			console.log("no buffer?");
@@ -230,8 +236,12 @@ var loadPointCloud = function(file, onload) {
 var selectPointCloud = function() {
 	var selection = document.getElementById("datasets").value;
 
-	loadPointCloud("", function(file, dataBuffer) {
+	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
 		gl.bindVertexArray(vao);
+		var firstUpload = !splatAttribVbo;
+		if (firstUpload) {
+			splatAttribVbo = gl.createBuffer();
+		}
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo);
 		gl.bufferData(gl.ARRAY_BUFFER, dataBuffer, gl.STATIC_DRAW);
 
@@ -248,69 +258,75 @@ var selectPointCloud = function() {
 		gl.vertexAttribPointer(3, 4, gl.FLOAT, false, sizeofSurfel, 32);
 		gl.vertexAttribDivisor(3, 1);
 
-		console.log(dataBuffer.length);
+		newPointCloudUpload = true;
+		surfelBuffer = dataBuffer;
+		surfelDataset = dataset;
 
-		setInterval(function() {
-			// Save them some battery if they're not viewing the tab
-			if (document.hidden) {
-				return;
-			}
-			var startTime = new Date();
+		if (firstUpload) {
+			setInterval(function() {
+				// Save them some battery if they're not viewing the tab
+				if (document.hidden) {
+					return;
+				}
+				var startTime = new Date();
 
-			gl.useProgram(splatShader);
+				gl.useProgram(splatShader);
 
-			gl.enable(gl.DEPTH_TEST);
-			gl.enable(gl.BLEND);
-			gl.blendFunc(gl.ONE, gl.ONE);
+				gl.enable(gl.DEPTH_TEST);
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.ONE, gl.ONE);
 
-			gl.clearDepth(1.0);
-			gl.clearColor(0.0, 0.0, 0.0, 0.0);
+				gl.clearDepth(1.0);
+				gl.clearColor(0.0, 0.0, 0.0, 0.0);
 
-			// Reset the sampling rate and camera for new volumes
-			if (newPointCloudUpload) {
-				camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
-			}
-			projView = mat4.mul(projView, proj, camera.camera);
-			gl.uniformMatrix4fv(projViewLoc, false, projView);
+				// Reset the sampling rate and camera for new volumes
+				if (newPointCloudUpload) {
+					camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
+				}
+				projView = mat4.mul(projView, proj, camera.camera);
 
-			var eye = [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
-			gl.uniform3fv(eyePosLoc, eye);
+				gl.uniform1f(scalingLoc, surfelDataset.scale);
+				gl.uniformMatrix4fv(projViewLoc, false, projView);
 
-			gl.uniform1f(splatRadiusScaleLoc, splatRadiusSlider.value);
+				var eye = [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
+				gl.uniform3fv(eyePosLoc, eye);
 
-			// Render depth prepass to filter occluded splats
-			gl.uniform1i(depthPrepassLoc, 1);
-			gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
-			gl.depthMask(true);
-			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-			gl.colorMask(false, false, false, false);
-			gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
-				splatVerts.length / 3, dataBuffer.length / sizeofSurfel);
+				gl.uniform1f(splatRadiusScaleLoc, splatRadiusSlider.value);
 
-			// Render splat pass to accumulate splats for each pixel
-			gl.uniform1i(depthPrepassLoc, 0);
-			gl.colorMask(true, true, true, true);
-			gl.depthMask(false);
-			gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
-				splatVerts.length / 3, dataBuffer.length / sizeofSurfel);
+				// Render depth prepass to filter occluded splats
+				gl.uniform1i(depthPrepassLoc, 1);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
+				gl.depthMask(true);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+				gl.colorMask(false, false, false, false);
+				gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
+					splatVerts.length / 3, surfelBuffer.length / sizeofSurfel);
 
-			// Render normalization full screen shader pass to produce final image
-			gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);
-			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-			gl.disable(gl.BLEND);
-			gl.useProgram(normalizationPassShader);
-			gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+				// Render splat pass to accumulate splats for each pixel
+				gl.uniform1i(depthPrepassLoc, 0);
+				gl.colorMask(true, true, true, true);
+				gl.depthMask(false);
+				gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
+					splatVerts.length / 3, surfelBuffer.length / sizeofSurfel);
 
-			// Wait for rendering to actually finish so we can time it
-			gl.finish();
-			var endTime = new Date();
-			var renderTime = endTime - startTime;
-			var targetSamplingRate = renderTime / targetFrameTime;
+				// Render normalization full screen shader pass to produce final image
+				gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+				gl.disable(gl.BLEND);
+				gl.useProgram(normalizationPassShader);
+				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-			newPointCloudUpload = false;
-			startTime = endTime;
-		}, targetFrameTime);
+				// Wait for rendering to actually finish so we can time it
+				gl.finish();
+				var endTime = new Date();
+				var renderTime = endTime - startTime;
+				var targetSamplingRate = renderTime / targetFrameTime;
+
+				newPointCloudUpload = false;
+				startTime = endTime;
+			}, targetFrameTime);
+		}
 	});
 }
 
@@ -351,10 +367,6 @@ window.onload = function(){
 	gl.enableVertexAttribArray(0);
 	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
-	// Create the splat attribute buffer for the per-splat instance data
-	//generateFibonacciSphere(2.0, 2000);
-	splatAttribVbo = gl.createBuffer();
-
 	splatShader = compileShader(vertShader, fragShader);
 	gl.useProgram(splatShader);
 
@@ -363,8 +375,9 @@ window.onload = function(){
 	depthPrepassLoc = gl.getUniformLocation(splatShader, "depth_prepass");
 	projView = mat4.create();
 
-	splatRadiusSlider.value = 1;
+	splatRadiusSlider.value = 2;
 	splatRadiusScaleLoc = gl.getUniformLocation(splatShader, "radius_scale");
+	scalingLoc = gl.getUniformLocation(splatShader, "scaling");
 
 	normalizationPassShader = compileShader(quadVertShader, normalizationFragShader);
 	gl.useProgram(normalizationPassShader);
