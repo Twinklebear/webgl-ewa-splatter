@@ -21,6 +21,7 @@ var vertShader =
 "uniform float radius_scale;" +
 
 "out highp vec2 uv;" +
+"out highp vec3 eye_dir;" +
 "flat out highp vec3 normal;" +
 "flat out highp vec3 splat_color;" +
 
@@ -40,7 +41,6 @@ var vertShader =
 			"c + pow(a.z, 2.0) * sub_c));" +
 "}" +
 
-// Note that splat_normal must be normalized
 "void main(void) {" +
 	"mat3 rot_mat = mat3(1.0);" +
 	"vec3 quad_normal = vec3(0, 0, 1);" +
@@ -54,6 +54,7 @@ var vertShader =
 	"uv = 2.0 * pos.xy;" +
 	"normal = splat_normal;" +
 	"vec3 sp = rot_mat * splat_pos_radius.w * radius_scale / 100.0 * pos + splat_pos_radius.xyz / 100.0;" +
+	"eye_dir = sp - eye_pos;" +
 	"gl_Position = proj_view * vec4(sp, 1.0);" +
 "}";
 
@@ -65,6 +66,7 @@ var fragShader =
 
 "uniform bool depth_prepass;" +
 "in highp vec2 uv;" +
+"in highp vec3 eye_dir;" +
 "flat in highp vec3 normal;" +
 "flat in highp vec3 splat_color;" +
 
@@ -76,13 +78,25 @@ var fragShader =
 		"discard;" +
 	"}" +
 	"if (depth_prepass) {" +
-		"gl_FragDepth = gl_FragCoord.z + 0.0001;" +
+		// TODO: We want the depth epsilon to be bigger closer to you but smaller
+		// farther away
+		"gl_FragDepth = gl_FragCoord.z + 0.0015;" +
 	"} else {" +
 		"gl_FragDepth = gl_FragCoord.z;" +
 	"}" +
 	"if (!depth_prepass) {" +
 		"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len * 5.0, 2.0)/2.0);" +
-		"color = vec4(splat_color * opacity, opacity);" +
+		"vec3 light_dir = normalize(vec3(0.5, 0.5, 1));" +
+		"float intensity = 0.25;" +
+		"if (dot(light_dir, normal) > 0.0) {" +
+			"intensity += dot(light_dir, normal);" +
+			"highp vec3 h = normalize(normalize(-eye_dir) + light_dir);" +
+			"highp float ndoth = dot(h, normal);" +
+			"if (ndoth > 0.0) {" +
+				"intensity += pow(ndoth, 40.0);" +
+			"}" +
+		"}" +
+		"color = vec4(intensity * splat_color * opacity, opacity);" +
 	"}" +
 "}";
 
@@ -100,16 +114,30 @@ var quadVertShader =
 
 var normalizationFragShader =
 "#version 300 es\n" +
+"precision highp int;" +
+"precision highp float;" +
 "uniform sampler2D splatBuf;" +
 "uniform highp vec2 canvas_dims;" +
 "out highp vec4 color;" +
+
+"float linear_to_srgb(float x) {" +
+	"if (x <= 0.0031308) {" +
+		"return 12.92 * x;" +
+	"}" +
+	"return 1.055 * pow(x, 1.0/2.4) - 0.055;" +
+"}" +
+
 "void main(void){ " +
-	"color = texture(splatBuf, gl_FragCoord.xy / canvas_dims);" +
+	"vec2 uv = gl_FragCoord.xy / canvas_dims;" +
+	"color = texture(splatBuf, uv);" +
 	"if (color.a != 0.0) {" +
 		"color.rgb = color.rgb / color.a;" +
 	"} else {" +
-		"color.rgb = vec3(0.2);" +
+		"color.rgb = vec3(uv.y * 0.9, 0.45, 0.9 - uv.y * 0.9);" +
 	"}" +
+	"color.r = linear_to_srgb(color.r);" +
+	"color.g = linear_to_srgb(color.g);" +
+	"color.b = linear_to_srgb(color.b);" +
 	"color.a = 1.0;" +
 "}";
 

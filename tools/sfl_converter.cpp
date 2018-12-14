@@ -22,6 +22,13 @@ T clamp(const T &x, const T &lo, const T &hi) {
 	return x;
 }
 
+float srgb_to_linear(const float x) {
+	if (x <= 0.04045) {
+		return x / 12.92;
+	} else {
+		return std::pow((x + 0.055f) / 1.055f, 2.4f);
+	}
+}
 
 #pragma pack
 struct Surfel {
@@ -35,6 +42,7 @@ int main(int argc, char **argv) {
 		std::cout << "Usage: " << argv[0] << " <input.sfl> <output.rsf>\n";
 		return 0;
 	}
+	const bool srgb_convert = (argc >= 3 && std::strcmp(argv[2], "-srgb") == 0);
 	sfl::InStream *in = sfl::InStream::open(argv[1]);
 	if (!in) {
 		std::cout << "Error opening surfel file " << argv[1] << "\n";
@@ -91,6 +99,11 @@ int main(int argc, char **argv) {
 			in->readSurfelColorRGBf(sfl::DIFFUSE, surf.r, surf.g, surf.b);
 			in->endSurfel();
 
+			if (srgb_convert) {
+				surf.r = srgb_to_linear(surf.r);
+				surf.g = srgb_to_linear(surf.g);
+				surf.b = srgb_to_linear(surf.b);
+			}
 			surfels.push_back(surf);
 		}
 	}
