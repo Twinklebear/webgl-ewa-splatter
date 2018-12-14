@@ -193,6 +193,12 @@ var pointClouds = {
 		size: 7110624,
 		zoom_start: -40,
 	},
+	"Santa": {
+		url: "ifj04gazg7o8f5d/santa.rsf",
+		scale: 1.0/30.0,
+		size: 3637488,
+		zoom_start: -30,
+	},
 	"Igea": {
 		url: "v0xl67jgo4x5pxd/igea.rsf",
 		scale: 1.0/30.0,
