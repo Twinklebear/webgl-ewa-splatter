@@ -5,37 +5,7 @@
 #include <vector>
 #include <fstream>
 #include <sfl.h>
-
-// The RAW surfel file format (.rsf) is simply a list of
-// surfels, where each surfel is specified by 8 floats (32 bytes):
-// x, y, z, radius, nx, ny, nz, color (rgba8)
-// The number of surfels in the file is: file_size / 32
-// The alpha component of the color is unused
-
-template<typename T>
-T clamp(const T &x, const T &lo, const T &hi) {
-	if (x < lo) {
-		return lo;
-	} else if (x > hi) {
-		return hi;
-	}
-	return x;
-}
-
-float srgb_to_linear(const float x) {
-	if (x <= 0.04045) {
-		return x / 12.92;
-	} else {
-		return std::pow((x + 0.055f) / 1.055f, 2.4f);
-	}
-}
-
-#pragma pack
-struct Surfel {
-	float x, y, z, radius;
-	float nx, ny, nz, pad;
-	float r, g, b, pad2;
-};
+#include "rsf_file.h"
 
 int main(int argc, char **argv) {
 	if (argc == 1) {
@@ -109,8 +79,7 @@ int main(int argc, char **argv) {
 	}
 	sfl::InStream::close(in);
 
-	std::ofstream fout(argv[2], std::ios::binary);
-	fout.write(reinterpret_cast<char*>(surfels.data()), sizeof(Surfel) * surfels.size());
+	write_raw_surfels(argv[2], surfels);
 
 	return 0;
 }
