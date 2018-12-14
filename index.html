@@ -21,14 +21,28 @@
 					Dataset: <select id="datasets" onchange="selectPointCloud()"></select>
 				</div>
 				<div class="col-12 mt-lg-2 mt-0">
+					<h4>Controls</h4>
 					<p>Mouse Controls: Left-click + drag to rotate, scroll to zoom, right-click + drag to pan.
 					<br/>
 					Touch Controls: One finger drag to rotate, pinch to zoom, two finger drag to pan.
-					</p>
 					<div class="form-group">
 						<label for="splatRadiusSlider">Splat Radius</label>
 						<input type="range" class="form-control-range" id="splatRadiusSlider" min="0.2" max="4.0" step="0.1">
 					</div>
+					</p>
+
+					<h4>Description</h4>
+					<p>
+					This is a WebGL implementation of the papers
+					<i>Object Space EWA Surface Splatting: A Hardware Accelerated Approach to High Quality Point Rendering</i>
+					by Ren, Pfister and Zwicker, and <i>High-Quality Point-Based Rendering on Modern GPUs</i>
+					by Botsch and Kobbelt, with a few shortcuts.
+					</p>
+					<p>
+					The Dinosaur, Man, Santa and Igea datasets are from
+					<a href="https://graphics.ethz.ch/pointshop3d/">Pointshop3D</a>,
+					the Sankt Johann is from the <a href="http://www.ifp.uni-stuttgart.de/publications/software/laser_splatting/">
+						University of Stuttgart</a>.
 					<p id="loadingText"></p>
 					<div class="progress mb-2">
 						<div id="loadingProgressBar" class="progress-bar" role="progressbar"

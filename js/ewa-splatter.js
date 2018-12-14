@@ -54,9 +54,12 @@ var vertShader =
 	"}" +
 	"uv = 2.0 * pos.xy;" +
 	"normal = splat_normal;" +
-	"vec3 sp = rot_mat * splat_pos_radius.w * radius_scale * scaling * pos " +
-				"+ splat_pos_radius.xyz * scaling;" +
-	"eye_dir = sp - eye_pos;" +
+	"float scaled_radius = splat_pos_radius.w * radius_scale * scaling;" +
+	"vec3 sp = rot_mat * scaled_radius * pos + splat_pos_radius.xyz * scaling;" +
+	"eye_dir = normalize(sp - eye_pos);" +
+	"if (depth_prepass) {" +
+		"sp += eye_dir * scaled_radius * 0.5;" +
+	"}" +
 	"gl_Position = proj_view * vec4(sp, 1.0);" +
 "}";
 
@@ -78,13 +81,6 @@ var fragShader =
 	"highp float len = length(uv);" +
 	"if (len > 1.0) {" +
 		"discard;" +
-	"}" +
-	"if (depth_prepass) {" +
-		// TODO: We want the depth epsilon to be bigger closer to you but smaller
-		// farther away
-		"gl_FragDepth = gl_FragCoord.z + 0.002;" +
-	"} else {" +
-		"gl_FragDepth = gl_FragCoord.z;" +
 	"}" +
 	"if (!depth_prepass) {" +
 		"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len * 5.0, 2.0)/2.0);" +
@@ -139,7 +135,7 @@ var normalizationFragShader =
 	"if (color.a != 0.0) {" +
 		"color.rgb = color.rgb / color.a;" +
 	"} else {" +
-		"color.rgb = vec3(uv.y * 0.7, uv.y * 0.7, 0.6);" +// - uv.y * 0.9);" +
+		"color.rgb = vec3(0.02);" +
 	"}" +
 	"color.r = linear_to_srgb(color.r);" +
 	"color.g = linear_to_srgb(color.g);" +
