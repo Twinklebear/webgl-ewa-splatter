@@ -15,12 +15,6 @@ if (SFL_FOUND)
 		CXX_STANDARD_REQUIRED ON)
 endif()
 
-#add_executable(qsplat_converter qsplat_converter.cpp)
-#target_link_libraries(qsplat_converter rsf)
-#set_target_properties(qsplat_converter PROPERTIES
-#	CXX_STANDARD 14
-#	CXX_STANDARD_REQUIRED ON)
-
 find_package(PCL)
 if (${PCL_FOUND})
 	find_package(OpenMP REQUIRED)

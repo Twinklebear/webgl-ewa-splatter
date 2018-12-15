@@ -12,13 +12,13 @@ Uses [glMatrix](http://glmatrix.net/) for math operations.
 The Santa from [Pointshop3D](https://graphics.ethz.ch/pointshop3d/), painted using
 Pointshop3D.
 
-[![santa](https://i.imgur.com/Wh5C6Ol.png)](https://www.willusher.io/webgl-ewa-splatter/#Santa)
+[![santa](https://i.imgur.com/yqCfPZz.png)](https://www.willusher.io/webgl-ewa-splatter/#Santa)
 
 The Dinosaur from [Pointshop3D](https://graphics.ethz.ch/pointshop3d/).
 
-[![dinosaur](https://i.imgur.com/CffRFQr.png)](https://www.willusher.io/webgl-ewa-splatter/#Dinosaur)
+[![dinosaur](https://i.imgur.com/c6Cj6xa.png)](https://www.willusher.io/webgl-ewa-splatter/#Dinosaur)
 
 The Sankt Johann scan from [University of Stuttgart](http://www.ifp.uni-stuttgart.de/publications/software/laser_splatting/).
 
-[![Sankt Johann](https://i.imgur.com/uxqfiqo.png)](https://www.willusher.io/webgl-ewa-splatter/#Sankt%20Johann)
+[![Sankt Johann](https://i.imgur.com/UBjFKRa.png)](https://www.willusher.io/webgl-ewa-splatter/#Sankt%20Johann)
 
