@@ -22,7 +22,6 @@ var vertShader =
 "uniform float scaling;" +
 
 "out highp vec2 uv;" +
-"out highp vec3 eye_dir;" +
 "flat out highp vec3 normal;" +
 "flat out highp vec3 splat_color;" +
 
@@ -62,9 +61,9 @@ var vertShader =
 	"}" +
 	"uv = 2.0 * pos.xy;" +
 	"vec3 sp = rot_mat * scaled_radius * pos + splat_pos_radius.xyz * scaling;" +
-	"eye_dir = normalize(sp - eye_pos);" +
+	"vec3 view_dir = normalize(sp - eye_pos);" +
 	"if (depth_prepass) {" +
-		"sp += eye_dir * scaled_radius * 0.5;" +
+		"sp += view_dir * scaled_radius * 0.5;" +
 	"}" +
 	"gl_Position = proj_view * vec4(sp, 1.0);" +
 "}";
@@ -77,11 +76,11 @@ var fragShader =
 
 "uniform bool depth_prepass;" +
 "in highp vec2 uv;" +
-"in highp vec3 eye_dir;" +
 "flat in highp vec3 normal;" +
 "flat in highp vec3 splat_color;" +
 
-"out highp vec4 color;" +
+"layout(location=0) out highp vec4 color;" +
+"layout(location=1) out highp vec3 normal_out;" +
 
 "void main(void) {" +
 	"highp float len = length(uv);" +
@@ -89,22 +88,9 @@ var fragShader =
 		"discard;" +
 	"}" +
 	"if (!depth_prepass) {" +
-		"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len * 5.0, 2.0)/2.0);" +
-		"vec3 light_dir = normalize(vec3(0.5, 0.5, 1));" +
-		"vec3 light_dir2 = normalize(vec3(-0.5, 0.25, -0.5));" +
-		"float intensity = 0.25;" +
-		"if (dot(light_dir, normal) > 0.0) {" +
-			"intensity += dot(light_dir, normal);" +
-			"highp vec3 h = normalize(normalize(-eye_dir) + light_dir);" +
-			"highp float ndoth = dot(h, normal);" +
-			"if (ndoth > 0.0) {" +
-				"intensity += pow(ndoth, 40.0);" +
-			"}" +
-		"}" +
-		"if (dot(light_dir2, normal) > 0.0) {" +
-			"intensity += dot(light_dir2, normal) * 0.5;" +
-		"}" +
-		"color = vec4(intensity * splat_color * opacity, opacity);" +
+		"highp float opacity = 1.0 / sqrt(2.0 * M_PI) * exp(-pow(len * 2.5, 2.0)/2.0);" +
+		"color = vec4(splat_color * opacity, opacity);" +
+		"normal_out = opacity * normal;" +
 	"}" +
 "}";
 
@@ -124,8 +110,9 @@ var normalizationFragShader =
 "#version 300 es\n" +
 "precision highp int;" +
 "precision highp float;" +
-"uniform sampler2D splatBuf;" +
-"uniform highp vec2 canvas_dims;" +
+"uniform sampler2D splat_colors;" +
+"uniform sampler2D splat_normals;" +
+"uniform highp vec3 eye_dir;" +
 "out highp vec4 color;" +
 
 "float linear_to_srgb(float x) {" +
@@ -136,10 +123,26 @@ var normalizationFragShader =
 "}" +
 
 "void main(void){ " +
-	"vec2 uv = gl_FragCoord.xy / canvas_dims;" +
-	"color = texture(splatBuf, uv);" +
+	"ivec2 uv = ivec2(gl_FragCoord.xy);" +
+	"color = texelFetch(splat_colors, uv, 0);" +
 	"if (color.a != 0.0) {" +
 		"color.rgb = color.rgb / color.a;" +
+		"vec3 normal = normalize(texelFetch(splat_normals, uv, 0).xyz / color.a);" +
+		"vec3 light_dir = normalize(vec3(0.5, 0.5, 1));" +
+		"vec3 light_dir2 = normalize(vec3(-0.5, 0.25, -0.5));" +
+		"float intensity = 0.25;" +
+		"if (dot(light_dir, normal) > 0.0) {" +
+			"intensity += dot(light_dir, normal);" +
+			"highp vec3 h = normalize(normalize(-eye_dir) + light_dir);" +
+			"highp float ndoth = dot(h, normal);" +
+			"if (ndoth > 0.0) {" +
+				"intensity += pow(ndoth, 40.0);" +
+			"}" +
+		"}" +
+		"if (dot(light_dir2, normal) > 0.0) {" +
+			"intensity += dot(light_dir2, normal) * 0.5;" +
+		"}" +
+		"color.rgb *= intensity;" +
 	"} else {" +
 		"color.rgb = vec3(0.02);" +
 	"}" +
@@ -158,6 +161,7 @@ var eyePosLoc = null;
 var depthPrepasLoc = null;
 var splatRadiusScaleLoc = null;
 var scalingLoc = null;
+var normalizationPassEyeDirLoc = null;
 
 var vao = null;
 var splatAttribVbo = null;
@@ -166,6 +170,7 @@ var tabFocused = true;
 var newPointCloudUpload = true;
 var splatShader = null;
 var splatAccumColorTex = null;
+var splatAccumNormalTex = null;
 var splatDepthTex = null;
 var splatAccumFbo = null
 var normalizationPassShader = null;
@@ -344,11 +349,12 @@ var selectPointCloud = function() {
 					splatVerts.length / 3, surfelBuffer.length / sizeofSurfel);
 
 				// Render normalization full screen shader pass to produce final image
-				gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 				gl.disable(gl.BLEND);
 				gl.useProgram(normalizationPassShader);
+				var eyeDir = camera.eyeDir();
+				gl.uniform3fv(normalizationPassEyeDirLoc, eyeDir);
 				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
 				// Wait for rendering to actually finish so we can time it
@@ -415,7 +421,9 @@ window.onload = function(){
 
 	normalizationPassShader = compileShader(quadVertShader, normalizationFragShader);
 	gl.useProgram(normalizationPassShader);
-	gl.uniform2f(gl.getUniformLocation(normalizationPassShader, "canvas_dims"), WIDTH, HEIGHT);
+	normalizationPassEyeDirLoc = gl.getUniformLocation(normalizationPassShader, "eye_dir");
+	gl.uniform1i(gl.getUniformLocation(normalizationPassShader, "splat_colors"), 0);
+	gl.uniform1i(gl.getUniformLocation(normalizationPassShader, "splat_normals"), 1);
 
 	// Setup the render targets for the splat rendering pass
 	splatDepthTex = gl.createTexture();
@@ -434,12 +442,24 @@ window.onload = function(){
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
+	splatAccumNormalTex = gl.createTexture();
+	gl.activeTexture(gl.TEXTURE1);
+	gl.bindTexture(gl.TEXTURE_2D, splatAccumNormalTex);
+	gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, WIDTH, HEIGHT);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
 	splatAccumFbo = gl.createFramebuffer();
 	gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
 	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
 		gl.TEXTURE_2D, splatAccumColorTex, 0);
+	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1,
+		gl.TEXTURE_2D, splatAccumNormalTex, 0);
 	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT,
 		gl.TEXTURE_2D, splatDepthTex, 0);
+	gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
 
 	// See if we were linked to a datset
 	if (window.location.hash) {

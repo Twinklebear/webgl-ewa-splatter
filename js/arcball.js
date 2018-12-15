@@ -58,6 +58,13 @@ ArcballCamera.prototype.updateCameraMatrix = function() {
 	this.invCamera = mat4.invert(this.invCamera, this.camera);
 }
 
+ArcballCamera.prototype.eyeDir = function() {
+	var dir = vec4.set(vec4.create(), 0.0, 0.0, -1.0, 0.0);
+	dir = vec4.transformMat4(dir, dir, this.invCamera);
+	dir = vec4.normalize(dir, dir);
+	return [dir[0], dir[1], dir[2]];
+}
+
 var screenToArcball = function(p) {
 	var dist = vec2.dot(p, p);
 	if (dist <= 1.0) {
