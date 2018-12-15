@@ -189,13 +189,15 @@ var pointClouds = {
 		size: 2697312,
 		zoom_start: -30,
 	},
+	/*
 	"Test": {
-		url: "ism_test_lioness.rsf",
-		scale: 1.0/20.0,
+		url: "painted_santa.rsf",
+		scale: 1.0/30.0,
 		size: 100,
 		zoom_start: -50,
 		testing: true,
 	},
+	*/
 	"Man": {
 		url: "yfk9l8rweuk2m51/male.rsf",
 		scale: 1.0/30.0,
@@ -203,7 +205,7 @@ var pointClouds = {
 		zoom_start: -40,
 	},
 	"Santa": {
-		url: "ifj04gazg7o8f5d/santa.rsf",
+		url: "m6yri2u10qs31pm/painted_santa.rsf",
 		scale: 1.0/30.0,
 		size: 3637488,
 		zoom_start: -30,
@@ -261,6 +263,7 @@ var loadPointCloud = function(dataset, onload) {
 
 var selectPointCloud = function() {
 	var selection = document.getElementById("datasets").value;
+	window.location.hash = "#" + selection;
 
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
 		gl.bindVertexArray(vao);
@@ -438,6 +441,13 @@ window.onload = function(){
 	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT,
 		gl.TEXTURE_2D, splatDepthTex, 0);
 
+	// See if we were linked to a datset
+	if (window.location.hash) {
+		var linkedDataset = decodeURI(window.location.hash.substr(1));
+		if (linkedDataset in pointClouds) {
+			document.getElementById("datasets").value = linkedDataset;
+		}
+	}
 	selectPointCloud();
 }
 
