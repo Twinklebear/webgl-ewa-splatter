@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(tools)
 
+find_package(GLM REQUIRED)
+include_directories(${GLM_INCLUDE_DIRS})
 add_library(rsf rsf_file.cpp)
 
 # Build SFL converter for Pointshop3D files
@@ -18,4 +20,16 @@ endif()
 #set_target_properties(qsplat_converter PROPERTIES
 #	CXX_STANDARD 14
 #	CXX_STANDARD_REQUIRED ON)
+
+find_package(PCL)
+if (${PCL_FOUND})
+	find_package(OpenMP REQUIRED)
+	add_executable(pcl_converter pcl_converter.cpp)
+	target_link_libraries(pcl_converter rsf ${PCL_LIBRARIES} OpenMP::OpenMP_CXX)
+	set_target_properties(pcl_converter PROPERTIES
+		CXX_STANDARD 14
+		CXX_STANDARD_REQUIRED ON)
+	target_include_directories(pcl_converter PUBLIC
+		$<BUILD_INTERFACE:${PCL_INCLUDE_DIRS}>)
+endif()
 

@@ -20,18 +20,20 @@ inline T clamp(const T &x, const T &lo, const T &hi) {
 }
 
 inline float srgb_to_linear(const float x) {
-	if (x <= 0.04045) {
-		return x / 12.92;
+	if (x <= 0.04045f) {
+		return x / 12.92f;
 	} else {
 		return std::pow((x + 0.055f) / 1.055f, 2.4f);
 	}
 }
 
-#pragma pack
+#pragma pack(1)
 struct Surfel {
 	float x, y, z, radius;
 	float nx, ny, nz, pad;
 	float r, g, b, pad2;
+
+	Surfel();
 };
 
 void write_raw_surfels(const std::string &fname, const std::vector<Surfel> &surfels);
