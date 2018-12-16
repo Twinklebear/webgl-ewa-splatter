@@ -66,3 +66,11 @@ var compileShader = function(vert, frag){
 	return program;
 }
 
+var getGLExtension = function(ext) {
+	if (!gl.getExtension(ext)) {
+		alert("Missing " + ext + " WebGL extension");
+		return false;
+	}
+	return true;
+}
+
