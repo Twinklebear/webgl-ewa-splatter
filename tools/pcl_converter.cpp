@@ -151,9 +151,10 @@ int main(int argc, char **argv) {
 		s.g = ((rgb >> 8)  & 0x0000ff) / 255.0;
 		s.b = (rgb & 0x0000ff) / 255.0;
 
-		s.radius = avg_neighbor_dist * 2.0;
+		s.radius = avg_neighbor_dist * 2.5;
 		surfels.push_back(s);
 	}
+	std::cout << "Writing surfel dataset with " << surfels.size() << " surfels\n";
 	write_raw_surfels(argv[2], surfels);
 
 	return 0;
