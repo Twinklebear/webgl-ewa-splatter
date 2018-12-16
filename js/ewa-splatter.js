@@ -45,21 +45,14 @@ var vertShader =
 	"mat3 rot_mat = mat3(1.0);" +
 	"vec3 quad_normal = vec3(0, 0, 1);" +
 	"float scaled_radius = splat_pos_radius.w * radius_scale * scaling;" +
+	"uv = 2.0 * pos.xy;" +
 	"normal = normalize(splat_normal.xyz);" +
-	// Make the normal face forward, we sort of need this if we're extracting
-	// normals from some datasets, b/c they may be flipped
-	/*
-	"if (dot(normal, (scaled_radius * pos + splat_pos_radius.xyz * scaling) - eye_pos) < 0.0) {" +
-		"normal = -normal;" +
-	"}" +
-	*/
 	"splat_color = splat_color_in.xyz;" +
 	"if (abs(normal) != quad_normal) {" +
 		"vec3 rot_axis = normalize(cross(quad_normal, normal));" +
 		"float rot_angle = acos(dot(quad_normal, normal));" +
 		"rot_mat = rotation_matrix(rot_axis, rot_angle);" +
 	"}" +
-	"uv = 2.0 * pos.xy;" +
 	"vec3 sp = rot_mat * scaled_radius * pos + splat_pos_radius.xyz * scaling;" +
 	"vec3 view_dir = normalize(sp - eye_pos);" +
 	"if (depth_prepass) {" +
@@ -194,15 +187,6 @@ var pointClouds = {
 		size: 2697312,
 		zoom_start: -30,
 	},
-	/*
-	"Test": {
-		url: "painted_santa.rsf",
-		scale: 1.0/30.0,
-		size: 100,
-		zoom_start: -50,
-		testing: true,
-	},
-	*/
 	"Man": {
 		url: "yfk9l8rweuk2m51/male.rsf",
 		scale: 1.0/30.0,
@@ -226,6 +210,12 @@ var pointClouds = {
 		scale: 1.0/200.0,
 		size: 11576112,
 		zoom_start: -40,
+	},
+	"Warnock Engineering Building": {
+		url: "xxkw3lp3m3rnn9g/utah_cs_bldg.rsf",
+		scale: 1.0/10.0,
+		size: 13677168,
+		zoom_start: -50,
 	}
 };
 
@@ -292,6 +282,8 @@ var selectPointCloud = function() {
 		gl.vertexAttribPointer(3, 4, gl.FLOAT, false, sizeofSurfel, 32);
 		gl.vertexAttribDivisor(3, 1);
 
+		
+		document.getElementById("numSplats").innerHTML = dataBuffer.length / sizeofSurfel;
 		newPointCloudUpload = true;
 		surfelBuffer = dataBuffer;
 		surfelDataset = dataset;
