@@ -114,7 +114,7 @@ var loadPointCloud = function(dataset, onload) {
 
 var selectPointCloud = function() {
 	var selection = document.getElementById("datasets").value;
-	window.location.hash = "#" + selection;
+	history.replaceState(history.state, "#" + selection, "#" + selection);
 
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
 		gl.bindVertexArray(vao);
