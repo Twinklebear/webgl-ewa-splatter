@@ -41,7 +41,7 @@ var pointClouds = {
 		url: "erx9893x0olqbfq/dinosaur.rsf",
 		scale: 1.0/30.0,
 		size: 2697312,
-		zoom_start: -30,
+		zoom_start: -40,
 	},
 	"Man": {
 		url: "yfk9l8rweuk2m51/male.rsf",
@@ -57,9 +57,9 @@ var pointClouds = {
 	},
 	"Igea": {
 		url: "v0xl67jgo4x5pxd/igea.rsf",
-		scale: 1.0/30.0,
+		scale: 1.0/40.0,
 		size: 6448560,
-		zoom_start: -20,
+		zoom_start: -50,
 	},
 	"Sankt Johann": {
 		url: "7db4xlbhnl2muzv/Sankt_Johann_B2.rsf",
