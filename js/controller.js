@@ -29,17 +29,14 @@ Controller.prototype.registerForCanvas = function(canvas) {
 		var curMouse = [evt.clientX - rect.left, evt.clientY - rect.top];
 		if (!prevMouse) {
 			prevMouse = [evt.clientX - rect.left, evt.clientY - rect.top];
-		} else {
-			if (self.mousemove) {
-				self.mousemove(prevMouse, curMouse, evt);
-			}
+		} else if (self.mousemove) {
+			self.mousemove(prevMouse, curMouse, evt);
 		}
 		prevMouse = curMouse;
 	});
 
 	canvas.addEventListener("wheel", function(evt) {
 		evt.preventDefault();
-		//camera.zoom(-evt.deltaY);
 		if (self.wheel) {
 			self.wheel(-evt.deltaY);
 		}
@@ -65,12 +62,11 @@ Controller.prototype.registerForCanvas = function(canvas) {
 		var numTouches = Object.keys(touches).length;
 		// Single finger to rotate the camera
 		if (numTouches == 1) {
-			var t = evt.changedTouches[0];
-			var prevTouch = touches[t.identifier];
-			var curTouch = [t.clientX - rect.left, t.clientY - rect.top];
-			// We send this as a fake left mouse click
-			evt.buttons = 1;
 			if (self.mousemove) {
+				var t = evt.changedTouches[0];
+				var prevTouch = touches[t.identifier];
+				var curTouch = [t.clientX - rect.left, t.clientY - rect.top];
+				evt.buttons = 1;
 				self.mousemove(prevTouch, curTouch, evt);
 			}
 		} else {
@@ -126,24 +122,20 @@ Controller.prototype.registerForCanvas = function(canvas) {
 			// If we're primarily moving along the pinching axis and in the opposite direction with
 			// the fingers, then the user is zooming.
 			// Otherwise, if the fingers are moving along the same direction they're panning
-			if (Math.abs(pinchMotion[0]) > 0.5 && Math.abs(pinchMotion[1]) > 0.5
+			if (self.pinch && Math.abs(pinchMotion[0]) > 0.5 && Math.abs(pinchMotion[1]) > 0.5
 				&& Math.sign(pinchMotion[0]) != Math.sign(pinchMotion[1]))
 			{
 				// Pinch distance change for zooming
 				var oldDist = pointDist(oldTouches[0], oldTouches[1]);
 				var newDist = pointDist(newTouches[0], newTouches[1]);
-				if (self.pinch) {
-					self.pinch(newDist - oldDist);
-				}
-			} else if (Math.abs(panMotion[0]) > 0.5 && Math.abs(panMotion[1]) > 0.5
+				self.pinch(newDist - oldDist);
+			} else if (self.twoFingerDrag && Math.abs(panMotion[0]) > 0.5 && Math.abs(panMotion[1]) > 0.5
 				&& Math.sign(panMotion[0]) == Math.sign(panMotion[1]))
 			{
 				// Pan by the average motion of the two fingers
 				var panAmount = vec2.lerp(vec2.create(), motionVectors[0], motionVectors[1], 0.5);
 				panAmount[1] = -panAmount[1];
-				if (self.twoFingerDrag) {
-					self.twoFingerDrag(panAmount);
-				}
+				self.twoFingerDrag(panAmount);
 			}
 		}
 
@@ -164,6 +156,4 @@ Controller.prototype.registerForCanvas = function(canvas) {
 	canvas.addEventListener("touchcancel", touchEnd);
 	canvas.addEventListener("touchend", touchEnd);
 }
-
-
 
