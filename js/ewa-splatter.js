@@ -149,12 +149,6 @@ var gl = null;
 var proj = null;
 var camera = null;
 var projView = null;
-var projViewLoc = null;
-var eyePosLoc = null;
-var depthPrepasLoc = null;
-var splatRadiusScaleLoc = null;
-var scalingLoc = null;
-var normalizationPassEyeDirLoc = null;
 
 var vao = null;
 var splatAttribVbo = null;
@@ -162,9 +156,7 @@ var splatAttribVbo = null;
 var tabFocused = true;
 var newPointCloudUpload = true;
 var splatShader = null;
-var splatAccumColorTex = null;
-var splatAccumNormalTex = null;
-var splatDepthTex = null;
+var splatRenderTargets = null;
 var splatAccumFbo = null
 var normalizationPassShader = null;
 
@@ -296,8 +288,6 @@ var selectPointCloud = function() {
 				}
 				var startTime = new Date();
 
-				gl.useProgram(splatShader);
-
 				gl.enable(gl.DEPTH_TEST);
 				gl.enable(gl.BLEND);
 				gl.blendFunc(gl.ONE, gl.ONE);
@@ -316,15 +306,14 @@ var selectPointCloud = function() {
 				}
 				projView = mat4.mul(projView, proj, camera.camera);
 
-				gl.uniform1f(scalingLoc, surfelDataset.scale);
-				gl.uniformMatrix4fv(projViewLoc, false, projView);
-
-				gl.uniform3fv(eyePosLoc, camera.eyePos());
-
-				gl.uniform1f(splatRadiusScaleLoc, splatRadiusSlider.value);
+				splatShader.use();
+				gl.uniform1f(splatShader.uniforms["scaling"], surfelDataset.scale);
+				gl.uniformMatrix4fv(splatShader.uniforms["proj_view"], false, projView);
+				gl.uniform3fv(splatShader.uniforms["eye_pos"], camera.eyePos());
+				gl.uniform1f(splatShader.uniforms["radius_scale"], splatRadiusSlider.value);
 
 				// Render depth prepass to filter occluded splats
-				gl.uniform1i(depthPrepassLoc, 1);
+				gl.uniform1i(splatShader.uniforms["depth_prepass"], 1);
 				gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
 				gl.depthMask(true);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -333,7 +322,7 @@ var selectPointCloud = function() {
 					splatVerts.length / 3, surfelBuffer.length / sizeofSurfel);
 
 				// Render splat pass to accumulate splats for each pixel
-				gl.uniform1i(depthPrepassLoc, 0);
+				gl.uniform1i(splatShader.uniforms["depth_prepass"], 0);
 				gl.colorMask(true, true, true, true);
 				gl.depthMask(false);
 				gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
@@ -343,9 +332,9 @@ var selectPointCloud = function() {
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 				gl.disable(gl.BLEND);
-				gl.useProgram(normalizationPassShader);
+				normalizationPassShader.use();
 				var eyeDir = camera.eyeDir();
-				gl.uniform3fv(normalizationPassEyeDirLoc, eyeDir);
+				gl.uniform3fv(normalizationPassShader.uniforms["eye_dir"], eyeDir);
 				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
 				// Wait for rendering to actually finish so we can time it
@@ -365,6 +354,8 @@ window.onload = function(){
 	fillDatasetSelector();
 
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
+	splatRadiusSlider.value = 2;
+
 	var canvas = document.getElementById("glcanvas");
 	gl = canvas.getContext("webgl2");
 	if (!gl) {
@@ -381,6 +372,7 @@ window.onload = function(){
 
 	proj = mat4.perspective(mat4.create(), 60 * Math.PI / 180.0,
 		WIDTH / HEIGHT, 1, 500);
+	projView = mat4.create();
 
 	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
 
@@ -411,58 +403,43 @@ window.onload = function(){
 	gl.enableVertexAttribArray(0);
 	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
-	splatShader = compileShader(vertShader, fragShader);
-	gl.useProgram(splatShader);
+	splatShader = new Shader(vertShader, fragShader);
 
-	eyePosLoc = gl.getUniformLocation(splatShader, "eye_pos");
-	projViewLoc = gl.getUniformLocation(splatShader, "proj_view");
-	depthPrepassLoc = gl.getUniformLocation(splatShader, "depth_prepass");
-	projView = mat4.create();
-
-	splatRadiusSlider.value = 2;
-	splatRadiusScaleLoc = gl.getUniformLocation(splatShader, "radius_scale");
-	scalingLoc = gl.getUniformLocation(splatShader, "scaling");
-
-	normalizationPassShader = compileShader(quadVertShader, normalizationFragShader);
-	gl.useProgram(normalizationPassShader);
-	normalizationPassEyeDirLoc = gl.getUniformLocation(normalizationPassShader, "eye_dir");
-	gl.uniform1i(gl.getUniformLocation(normalizationPassShader, "splat_colors"), 0);
-	gl.uniform1i(gl.getUniformLocation(normalizationPassShader, "splat_normals"), 1);
+	normalizationPassShader = new Shader(quadVertShader, normalizationFragShader);
+	normalizationPassShader.use();
+	gl.uniform1i(normalizationPassShader.uniforms["splat_colors"], 0)
+	gl.uniform1i(normalizationPassShader.uniforms["splat_normals"], 1)
 
 	// Setup the render targets for the splat rendering pass
-	splatDepthTex = gl.createTexture();
-	gl.bindTexture(gl.TEXTURE_2D, splatDepthTex);
+	splatRenderTargets = [gl.createTexture(), gl.createTexture(), gl.createTexture()];
+	for (var i = 0; i < 2; ++i) {
+		gl.bindTexture(gl.TEXTURE_2D, splatRenderTargets[i]);
+		gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, WIDTH, HEIGHT);
+	}
+	gl.bindTexture(gl.TEXTURE_2D, splatRenderTargets[2]);
 	gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT32F, WIDTH, HEIGHT);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-	splatAccumColorTex = gl.createTexture();
-	gl.bindTexture(gl.TEXTURE_2D, splatAccumColorTex);
-	gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, WIDTH, HEIGHT);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-	splatAccumNormalTex = gl.createTexture();
+	for (var i = 0; i < 3; ++i) {
+		gl.bindTexture(gl.TEXTURE_2D, splatRenderTargets[i]);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	}
+	// Setup the bindings for the normalization pass shader
+	gl.activeTexture(gl.TEXTURE0);
+	gl.bindTexture(gl.TEXTURE_2D, splatRenderTargets[0]);
 	gl.activeTexture(gl.TEXTURE1);
-	gl.bindTexture(gl.TEXTURE_2D, splatAccumNormalTex);
-	gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, WIDTH, HEIGHT);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.bindTexture(gl.TEXTURE_2D, splatRenderTargets[1]);
 
 	splatAccumFbo = gl.createFramebuffer();
 	gl.bindFramebuffer(gl.FRAMEBUFFER, splatAccumFbo);
 	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-		gl.TEXTURE_2D, splatAccumColorTex, 0);
+		gl.TEXTURE_2D, splatRenderTargets[0], 0);
 	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1,
-		gl.TEXTURE_2D, splatAccumNormalTex, 0);
+		gl.TEXTURE_2D, splatRenderTargets[1], 0);
 	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT,
-		gl.TEXTURE_2D, splatDepthTex, 0);
+		gl.TEXTURE_2D, splatRenderTargets[2], 0);
 	gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
 
 	// See if we were linked to a datset
@@ -483,40 +460,6 @@ var fillDatasetSelector = function() {
 		opt.innerHTML = v;
 		selector.appendChild(opt);
 	}
-}
-
-// Compile and link the shaders vert and frag. vert and frag should contain
-// the shader source code for the vertex and fragment shaders respectively
-// Returns the compiled and linked program, or null if compilation or linking failed
-var compileShader = function(vert, frag){
-	var vs = gl.createShader(gl.VERTEX_SHADER);
-	gl.shaderSource(vs, vert);
-	gl.compileShader(vs);
-	if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)){
-		alert("Vertex shader failed to compile, see console for log");
-		console.log(gl.getShaderInfoLog(vs));
-		return null;
-	}
-
-	var fs = gl.createShader(gl.FRAGMENT_SHADER);
-	gl.shaderSource(fs, frag);
-	gl.compileShader(fs);
-	if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)){
-		alert("Fragment shader failed to compile, see console for log");
-		console.log(gl.getShaderInfoLog(fs));
-		return null;
-	}
-
-	var program = gl.createProgram();
-	gl.attachShader(program, vs);
-	gl.attachShader(program, fs);
-	gl.linkProgram(program);
-	if (!gl.getProgramParameter(program, gl.LINK_STATUS)){
-		alert("Shader failed to link, see console for log");
-		console.log(gl.getProgramInfoLog(program));
-		return null;
-	}
-	return program;
 }
 
 var getGLExtension = function(ext) {
