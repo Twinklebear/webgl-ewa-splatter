@@ -319,8 +319,7 @@ var selectPointCloud = function() {
 				gl.uniform1f(scalingLoc, surfelDataset.scale);
 				gl.uniformMatrix4fv(projViewLoc, false, projView);
 
-				var eye = [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
-				gl.uniform3fv(eyePosLoc, eye);
+				gl.uniform3fv(eyePosLoc, camera.eyePos());
 
 				gl.uniform1f(splatRadiusScaleLoc, splatRadiusSlider.value);
 
@@ -386,7 +385,20 @@ window.onload = function(){
 	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
 
 	// Register mouse and touch listeners
-	registerEventHandlers(canvas);
+	var controller = new Controller();
+	controller.mousemove = function(prev, cur, evt) {
+		if (evt.buttons == 1) {
+			camera.rotate(prev, cur);
+
+		} else if (evt.buttons == 2) {
+			camera.pan([cur[0] - prev[0], prev[1] - cur[1]]);
+		}
+	};
+	controller.wheel = function(amt) { camera.zoom(amt); };
+	controller.pinch = controller.wheel;
+	controller.twoFingerDrag = function(drag) { camera.pan(drag); };
+
+	controller.registerForCanvas(canvas);
 
 	vao = gl.createVertexArray();
 	gl.bindVertexArray(vao);
@@ -471,147 +483,6 @@ var fillDatasetSelector = function() {
 		opt.innerHTML = v;
 		selector.appendChild(opt);
 	}
-}
-
-// This can likely be part of the camera code itself
-var registerEventHandlers = function(canvas) {
-	var prevMouse = null;
-	var mouseState = [false, false];
-	canvas.addEventListener("mousemove", function(evt) {
-		evt.preventDefault();
-		var rect = canvas.getBoundingClientRect();
-		var curMouse = [evt.clientX - rect.left, evt.clientY - rect.top];
-		if (!prevMouse) {
-			prevMouse = [evt.clientX - rect.left, evt.clientY - rect.top];
-		} else {
-			if (evt.buttons == 1) {
-				camera.rotate(prevMouse, curMouse);
-			} else if (evt.buttons == 2) {
-				camera.pan([curMouse[0] - prevMouse[0], prevMouse[1] - curMouse[1]]);
-			}
-		}
-		prevMouse = curMouse;
-	});
-
-	canvas.addEventListener("wheel", function(evt) {
-		evt.preventDefault();
-		camera.zoom(-evt.deltaY);
-	});
-
-	canvas.oncontextmenu = function (evt) {
-		evt.preventDefault();
-	};
-
-	var touches = {};
-	canvas.addEventListener("touchstart", function(evt) {
-		var rect = canvas.getBoundingClientRect();
-		evt.preventDefault();
-		for (var i = 0; i < evt.changedTouches.length; ++i) {
-			var t = evt.changedTouches[i];
-			touches[t.identifier] = [t.clientX - rect.left, t.clientY - rect.top];
-		}
-	});
-
-	canvas.addEventListener("touchmove", function(evt) {
-		evt.preventDefault();
-		var rect = canvas.getBoundingClientRect();
-		var numTouches = Object.keys(touches).length;
-		// Single finger to rotate the camera
-		if (numTouches == 1) {
-			var t = evt.changedTouches[0];
-			var prevTouch = touches[t.identifier];
-			camera.rotate(prevTouch, [t.clientX - rect.left, t.clientY - rect.top]);
-		} else {
-			var curTouches = {};
-			for (var i = 0; i < evt.changedTouches.length; ++i) {
-				var t = evt.changedTouches[i];
-				curTouches[t.identifier] = [t.clientX - rect.left, t.clientY - rect.top];
-			}
-
-			// If some touches didn't change make sure we have them in
-			// our curTouches list to compute the pinch distance
-			// Also get the old touch points to compute the distance here
-			var oldTouches = [];
-			for (t in touches) {
-				if (!(t in curTouches)) {
-					curTouches[t] = touches[t];
-				}
-				oldTouches.push(touches[t]);
-			}
-
-			var newTouches = [];
-			for (t in curTouches) {
-				newTouches.push(curTouches[t]);
-			}
-
-			// Determine if the user is pinching or panning
-			var motionVectors = [
-				vec2.set(vec2.create(), newTouches[0][0] - oldTouches[0][0],
-					newTouches[0][1] - oldTouches[0][1]),
-				vec2.set(vec2.create(), newTouches[1][0] - oldTouches[1][0],
-					newTouches[1][1] - oldTouches[1][1])
-			];
-			var motionDirs = [vec2.create(), vec2.create()];
-			vec2.normalize(motionDirs[0], motionVectors[0]);
-			vec2.normalize(motionDirs[1], motionVectors[1]);
-			
-			var pinchAxis = vec2.set(vec2.create(), oldTouches[1][0] - oldTouches[0][0],
-				oldTouches[1][1] - oldTouches[0][1]);
-			vec2.normalize(pinchAxis, pinchAxis);
-
-			var panAxis = vec2.lerp(vec2.create(), motionVectors[0], motionVectors[1], 0.5);
-			vec2.normalize(panAxis, panAxis);
-
-			var pinchMotion = [
-				vec2.dot(pinchAxis, motionDirs[0]),
-				vec2.dot(pinchAxis, motionDirs[1])
-			];
-			var panMotion = [
-				vec2.dot(panAxis, motionDirs[0]),
-				vec2.dot(panAxis, motionDirs[1])
-			];
-
-			// If we're primarily moving along the pinching axis and in the opposite direction with
-			// the fingers, then the user is zooming.
-			// Otherwise, if the fingers are moving along the same direction they're panning
-			if (Math.abs(pinchMotion[0]) > 0.5 && Math.abs(pinchMotion[1]) > 0.5
-				&& Math.sign(pinchMotion[0]) != Math.sign(pinchMotion[1]))
-			{
-				// Pinch distance change for zooming
-				var oldDist = pointDist(oldTouches[0], oldTouches[1]);
-				var newDist = pointDist(newTouches[0], newTouches[1]);
-				camera.zoom(newDist - oldDist);
-			} else if (Math.abs(panMotion[0]) > 0.5 && Math.abs(panMotion[1]) > 0.5
-				&& Math.sign(panMotion[0]) == Math.sign(panMotion[1]))
-			{
-				// Pan by the average motion of the two fingers
-				var panAmount = vec2.lerp(vec2.create(), motionVectors[0], motionVectors[1], 0.5);
-				panAmount[1] = -panAmount[1];
-				camera.pan(panAmount);
-			}
-		}
-
-		// Update the existing list of touches with the current positions
-		for (var i = 0; i < evt.changedTouches.length; ++i) {
-			var t = evt.changedTouches[i];
-			touches[t.identifier] = [t.clientX - rect.left, t.clientY - rect.top];
-		}
-	});
-
-	var touchEnd = function(evt) {
-		evt.preventDefault();
-		for (var i = 0; i < evt.changedTouches.length; ++i) {
-			var t = evt.changedTouches[i];
-			delete touches[t.identifier];
-		}
-	}
-	canvas.addEventListener("touchcancel", touchEnd);
-	canvas.addEventListener("touchend", touchEnd);
-}
-
-var pointDist = function(a, b) {
-	var v = [b[0] - a[0], b[1] - a[1]];
-	return Math.sqrt(Math.pow(v[0], 2.0) + Math.pow(v[1], 2.0));
 }
 
 // Compile and link the shaders vert and frag. vert and frag should contain

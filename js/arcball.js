@@ -58,8 +58,19 @@ ArcballCamera.prototype.updateCameraMatrix = function() {
 	this.invCamera = mat4.invert(this.invCamera, this.camera);
 }
 
+ArcballCamera.prototype.eyePos = function() {
+	return [camera.invCamera[12], camera.invCamera[13], camera.invCamera[14]];
+}
+
 ArcballCamera.prototype.eyeDir = function() {
 	var dir = vec4.set(vec4.create(), 0.0, 0.0, -1.0, 0.0);
+	dir = vec4.transformMat4(dir, dir, this.invCamera);
+	dir = vec4.normalize(dir, dir);
+	return [dir[0], dir[1], dir[2]];
+}
+
+ArcballCamera.prototype.upDir = function() {
+	var dir = vec4.set(vec4.create(), 0.0, 1.0, 0.0, 0.0);
 	dir = vec4.transformMat4(dir, dir, this.invCamera);
 	dir = vec4.normalize(dir, dir);
 	return [dir[0], dir[1], dir[2]];
@@ -76,8 +87,12 @@ var screenToArcball = function(p) {
 		return quat.set(quat.create(), unitP[0], unitP[1], 0, 0);
 	}
 }
-
 var clamp = function(a, min, max) {
 	return a < min ? min : a > max ? max : a;
+}
+
+var pointDist = function(a, b) {
+	var v = [b[0] - a[0], b[1] - a[1]];
+	return Math.sqrt(Math.pow(v[0], 2.0) + Math.pow(v[1], 2.0));
 }
 
