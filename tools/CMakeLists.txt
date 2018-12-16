@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(tools)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 add_library(rsf rsf_file.cpp)
@@ -16,14 +18,17 @@ if (SFL_FOUND)
 endif()
 
 find_package(PCL)
-if (${PCL_FOUND})
+find_package(LASTools)
+if (${PCL_FOUND} AND ${LASTOOLS_FOUND})
 	find_package(OpenMP REQUIRED)
 	add_executable(pcl_converter pcl_converter.cpp)
-	target_link_libraries(pcl_converter rsf ${PCL_LIBRARIES} OpenMP::OpenMP_CXX)
+	target_link_libraries(pcl_converter rsf
+		OpenMP::OpenMP_CXX ${PCL_LIBRARIES} ${LASTOOLS_LIBRARIES})
 	set_target_properties(pcl_converter PROPERTIES
 		CXX_STANDARD 14
 		CXX_STANDARD_REQUIRED ON)
 	target_include_directories(pcl_converter PUBLIC
-		$<BUILD_INTERFACE:${PCL_INCLUDE_DIRS}>)
+		$<BUILD_INTERFACE:${PCL_INCLUDE_DIRS}>
+		$<BUILD_INTERFACE:${LASTOOLS_INCLUDE_DIRS}>)
 endif()
 
