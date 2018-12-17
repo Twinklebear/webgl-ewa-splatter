@@ -2,8 +2,11 @@
 
 An elliptical weighted average (EWA) surface splatter, implemented in WebGL.
 [Try it out online!](https://www.willusher.io/webgl-ewa-splatter/)
-This implements the papers: *Object Space EWA Surface Splatting: A Hardware Accelerated Approach to High Quality Point Rendering*
-by Ren, Pfister and Zwicker, and *High-Quality Point-Based Rendering on Modern GPUs* by Botsch and Kobbelt, with a few shortcuts.
+This implements the papers: *Object Space EWA Surface Splatting: A Hardware
+Accelerated Approach to High Quality Point Rendering* by Ren, Pfister and Zwicker,
+and *High-Quality Point-Based Rendering on Modern GPUs* by Botsch and Kobbelt, with a few shortcuts.
+The renderer uses an arcball camera which supports mouse or touch input,
+and downloads datasets via XMLHttpRequest from Dropbox when selected.
 
 Uses [webgl-util](https://github.com/Twinklebear/webgl-util) for some WebGL utilities and [glMatrix](http://glmatrix.net/) for matrix/vector operations.
 
