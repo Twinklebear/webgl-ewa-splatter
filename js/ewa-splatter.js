@@ -26,6 +26,7 @@ var normalizationPassShader = null;
 
 var surfelBuffer = null;
 var surfelDataset = null;
+var numSurfels = null;
 
 var splatRadiusSlider = null;
 
@@ -54,6 +55,14 @@ var pointClouds = {
 		scale: 1.0/30.0,
 		size: 3637488,
 		zoom_start: -30,
+	},
+	"Test": {
+//		url: "painted_santa2.rsf",
+		url: "utah_cs_bldg2.rsf",
+		scale: 1.0/30.0,
+		size: 3637488,
+		zoom_start: -30,
+		testing: true,
 	},
 	"Igea": {
 		url: "v0xl67jgo4x5pxd/igea.rsf",
@@ -100,10 +109,9 @@ var loadPointCloud = function(dataset, onload) {
 	req.onload = function(evt) {
 		loadingProgressText.innerHTML = "Loaded Dataset";
 		loadingProgressBar.setAttribute("style", "width: 100%");
-		var dataBuffer = req.response;
-		if (dataBuffer) {
-			dataBuffer = new Uint8Array(dataBuffer);
-			onload(dataset, dataBuffer);
+		var buffer = req.response;
+		if (buffer) {
+			onload(dataset, buffer);
 		} else {
 			alert("Unable to load buffer properly from volume?");
 			console.log("no buffer?");
@@ -117,30 +125,37 @@ var selectPointCloud = function() {
 	history.replaceState(history.state, "#" + selection, "#" + selection);
 
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
-		gl.bindVertexArray(vao);
+		var sizeofSurfel = 24;
+		var header = new Uint32Array(dataBuffer, 0, 4);
+		numSurfels = header[0]
+		var surfelPositions = new Float32Array(dataBuffer, 4, numSurfels * (sizeofSurfel / 4));
+		var surfelColors = new Uint8Array(dataBuffer, numSurfels * sizeofSurfel);
+
 		var firstUpload = !splatAttribVbo;
 		if (firstUpload) {
-			splatAttribVbo = gl.createBuffer();
+			splatAttribVbo = [gl.createBuffer(), gl.createBuffer()]; 
 		}
-		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo);
-		gl.bufferData(gl.ARRAY_BUFFER, dataBuffer, gl.STATIC_DRAW);
 
-		var sizeofSurfel = 48;
+		gl.bindVertexArray(vao);
+		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
+		gl.bufferData(gl.ARRAY_BUFFER, surfelPositions, gl.STATIC_DRAW);
+
 		gl.enableVertexAttribArray(1);
 		gl.vertexAttribPointer(1, 4, gl.FLOAT, false, sizeofSurfel, 0);
 		gl.vertexAttribDivisor(1, 1);
 
 		gl.enableVertexAttribArray(2);
-		gl.vertexAttribPointer(2, 4, gl.FLOAT, false, sizeofSurfel, 16);
+		gl.vertexAttribPointer(2, 4, gl.HALF_FLOAT, false, sizeofSurfel, 16);
 		gl.vertexAttribDivisor(2, 1);
 
+		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
+		gl.bufferData(gl.ARRAY_BUFFER, surfelColors, gl.STATIC_DRAW);
 		gl.enableVertexAttribArray(3);
-		gl.vertexAttribPointer(3, 4, gl.FLOAT, false, sizeofSurfel, 32);
+		gl.vertexAttribPointer(3, 4, gl.UNSIGNED_BYTE, true, 0, 4);
 		gl.vertexAttribDivisor(3, 1);
-
 		
-		document.getElementById("numSplats").innerHTML = dataBuffer.length / sizeofSurfel;
 		newPointCloudUpload = true;
+		document.getElementById("numSplats").innerHTML = numSurfels;
 		surfelBuffer = dataBuffer;
 		surfelDataset = dataset;
 
@@ -182,15 +197,13 @@ var selectPointCloud = function() {
 				gl.depthMask(true);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 				gl.colorMask(false, false, false, false);
-				gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
-					splatVerts.length / 3, surfelBuffer.length / sizeofSurfel);
+				gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, numSurfels);
 
 				// Render splat pass to accumulate splats for each pixel
 				gl.uniform1i(splatShader.uniforms["depth_prepass"], 0);
 				gl.colorMask(true, true, true, true);
 				gl.depthMask(false);
-				gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0,
-					splatVerts.length / 3, surfelBuffer.length / sizeofSurfel);
+				gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, numSurfels);
 
 				// Render normalization full screen shader pass to produce final image
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);

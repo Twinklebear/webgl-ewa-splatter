@@ -3,8 +3,8 @@ var vertShader =
 #line 4
 layout(location=0) in vec3 pos;
 layout(location=1) in highp vec4 splat_pos_radius;
-layout(location=2) in highp vec4 splat_normal;
-layout(location=3) in highp vec4 splat_color_in;
+layout(location=2) in mediump vec4 splat_normal;
+layout(location=3) in mediump vec4 splat_color_in;
 
 uniform bool depth_prepass;
 uniform highp vec3 eye_pos;
@@ -13,8 +13,8 @@ uniform float radius_scale;
 uniform float scaling;
 
 out highp vec2 uv;
-flat out highp vec3 normal;
-flat out highp vec3 splat_color;
+flat out mediump vec3 normal;
+flat out mediump vec3 splat_color;
 
 mat3 rotation_matrix(vec3 a, float angle) {
 	float c = cos(angle);
@@ -61,8 +61,8 @@ precision highp float;\n
 
 uniform bool depth_prepass;
 in highp vec2 uv;
-flat in highp vec3 normal;
-flat in highp vec3 splat_color;
+flat in mediump vec3 normal;
+flat in mediump vec3 splat_color;
 
 layout(location=0) out highp vec4 color;
 layout(location=1) out highp vec3 normal_out;
