@@ -7,6 +7,12 @@ find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 add_library(rsf rsf_file.cpp)
 
+add_executable(rsf_updater rsf_updater.cpp)
+target_link_libraries(rsf_updater rsf)
+set_target_properties(rsf_updater PROPERTIES
+	CXX_STANDARD 14
+	CXX_STANDARD_REQUIRED ON)
+
 # Build SFL converter for Pointshop3D files
 find_package(sfl)
 if (SFL_FOUND)

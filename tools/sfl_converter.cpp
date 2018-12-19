@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
 	}
 	sfl::InStream::close(in);
 
-	write_raw_surfels(argv[2], surfels);
+	write_raw_surfels_v2(argv[2], surfels);
 
 	return 0;
 }

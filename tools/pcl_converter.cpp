@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
 		surfels.push_back(s);
 	}
 	std::cout << "Writing surfel dataset with " << surfels.size() << " surfels\n";
-	write_raw_surfels(argv[2], surfels);
+	write_raw_surfels_v2(argv[2], surfels);
 
 	return 0;
 }
