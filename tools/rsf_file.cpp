@@ -12,7 +12,7 @@ Surfel::Surfel() : x(0), y(0), z(0), radius(1),
 #pragma pack(1)
 struct PackedSurfel {
 	float x, y, z, radius;
-	uint16_t nx, ny, nz, pad;
+	float nx, ny, nz, pad;
 
 	PackedSurfel()
 		: x(0), y(0), z(0), radius(0),
@@ -33,9 +33,9 @@ void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &s
 		p.y = s.y;
 		p.z = s.z;
 		p.radius = s.radius;
-		p.nx = glm::packHalf1x16(s.nx);
-		p.ny = glm::packHalf1x16(s.ny);
-		p.nz = glm::packHalf1x16(s.nz);
+		p.nx = s.nx;
+		p.ny = s.ny;
+		p.nz = s.nz;
 		packed_surfs.push_back(p);
 
 		colors.push_back(static_cast<uint8_t>(clamp(s.r * 255.f, 0.f, 255.f)));
