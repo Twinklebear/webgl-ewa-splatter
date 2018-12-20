@@ -44,11 +44,11 @@ var pointClouds = {
 		size: 2697312,
 		zoom_start: -40,
 	},
-	"Man": {
-		url: "yfk9l8rweuk2m51/male.rsf",
-		scale: 1.0/30.0,
-		size: 7110624,
-		zoom_start: -40,
+	"Leo": {
+		url: "h4kradxo3lbtar8/leo.rsf",
+		scale: 50,
+		size: 2708256,
+		zoom_start: -8,
 	},
 	"Santa": {
 		url: "m6yri2u10qs31pm/painted_santa.rsf",
@@ -68,7 +68,13 @@ var pointClouds = {
 		url: "v0xl67jgo4x5pxd/igea.rsf",
 		scale: 1.0/40.0,
 		size: 6448560,
-		zoom_start: -50,
+		zoom_start: -70,
+	},
+	"Man": {
+		url: "yfk9l8rweuk2m51/male.rsf",
+		scale: 1.0/30.0,
+		size: 7110624,
+		zoom_start: -40,
 	},
 	"Sankt Johann": {
 		url: "7db4xlbhnl2muzv/Sankt_Johann_B2.rsf",
@@ -235,7 +241,7 @@ window.onload = function(){
 	fillDatasetSelector();
 
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
-	splatRadiusSlider.value = 2;
+	splatRadiusSlider.value = 2.5;
 
 	var canvas = document.getElementById("glcanvas");
 	gl = canvas.getContext("webgl2");
@@ -252,7 +258,7 @@ window.onload = function(){
 	HEIGHT = canvas.getAttribute("height");
 
 	proj = mat4.perspective(mat4.create(), 60 * Math.PI / 180.0,
-		WIDTH / HEIGHT, 1, 500);
+		WIDTH / HEIGHT, 0.1, 500);
 	projView = mat4.create();
 
 	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
