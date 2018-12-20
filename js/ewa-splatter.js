@@ -228,7 +228,7 @@ window.onload = function(){
 	fillDatasetSelector();
 
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
-	splatRadiusSlider.value = 2;
+	splatRadiusSlider.value = 2.5;
 
 	var canvas = document.getElementById("glcanvas");
 	gl = canvas.getContext("webgl2");
