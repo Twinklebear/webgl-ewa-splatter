@@ -101,6 +101,9 @@ var pointDist = function(a, b) {
  * mousemove: function(prevMouse, curMouse, evt)
  *     receives both regular mouse events, and single-finger drags (sent as a left-click),
  *
+ * press: function(curMouse, evt)
+ *     receives mouse click and touch start events
+ *
  * wheel: function(amount)
  *     mouse wheel scrolling
  *
@@ -112,6 +115,7 @@ var pointDist = function(a, b) {
  */
 var Controller = function() {
 	this.mousemove = null;
+	this.press = null;
 	this.wheel = null;
 	this.twoFingerDrag = null;
 	this.pinch = null;
@@ -133,6 +137,15 @@ Controller.prototype.registerForCanvas = function(canvas) {
 		prevMouse = curMouse;
 	});
 
+	canvas.addEventListener("mousedown", function(evt) {
+		evt.preventDefault();
+		var rect = canvas.getBoundingClientRect();
+		var curMouse = [evt.clientX - rect.left, evt.clientY - rect.top];
+		if (self.press) {
+			self.press(curMouse, evt);
+		}
+	});
+
 	canvas.addEventListener("wheel", function(evt) {
 		evt.preventDefault();
 		if (self.wheel) {
@@ -151,6 +164,9 @@ Controller.prototype.registerForCanvas = function(canvas) {
 		for (var i = 0; i < evt.changedTouches.length; ++i) {
 			var t = evt.changedTouches[i];
 			touches[t.identifier] = [t.clientX - rect.left, t.clientY - rect.top];
+			if (evt.changedTouches.length == 1 && self.press) {
+				self.press(touches[t.identifier], evt);
+			}
 		}
 	});
 

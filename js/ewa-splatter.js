@@ -26,6 +26,8 @@ var normalizationPassShader = null;
 
 var surfelBuffer = null;
 var surfelDataset = null;
+var surfelPositions = null;
+var surfelColors = null;
 var numSurfels = null;
 
 var splatRadiusSlider = null;
@@ -38,6 +40,14 @@ var HEIGHT = 480;
 const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 
 var pointClouds = {
+	"Test": {
+		//url: "dinosaur2.rsf",
+		url: "painted_santa2.rsf",
+		scale: 1.0/30.0,
+		size: 3637488,
+		zoom_start: -30,
+		testing: true,
+	},
 	"Dinosaur": {
 		url: "erx9893x0olqbfq/dinosaur.rsf",
 		scale: 1.0/30.0,
@@ -55,14 +65,6 @@ var pointClouds = {
 		scale: 1.0/30.0,
 		size: 3637488,
 		zoom_start: -30,
-	},
-	"Test": {
-//		url: "painted_santa2.rsf",
-		url: "utah_cs_bldg2.rsf",
-		scale: 1.0/30.0,
-		size: 3637488,
-		zoom_start: -30,
-		testing: true,
 	},
 	"Igea": {
 		url: "v0xl67jgo4x5pxd/igea.rsf",
@@ -131,11 +133,11 @@ var selectPointCloud = function() {
 	history.replaceState(history.state, "#" + selection, "#" + selection);
 
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
-		var sizeofSurfel = 24;
+		var sizeofSurfel = 32;
 		var header = new Uint32Array(dataBuffer, 0, 4);
 		numSurfels = header[0]
-		var surfelPositions = new Float32Array(dataBuffer, 4, numSurfels * (sizeofSurfel / 4));
-		var surfelColors = new Uint8Array(dataBuffer, numSurfels * sizeofSurfel);
+		surfelPositions = new Float32Array(dataBuffer, 4, numSurfels * (sizeofSurfel / 4));
+		surfelColors = new Uint8Array(dataBuffer, 4 + numSurfels * sizeofSurfel);
 
 		var firstUpload = !splatAttribVbo;
 		if (firstUpload) {
@@ -151,13 +153,13 @@ var selectPointCloud = function() {
 		gl.vertexAttribDivisor(1, 1);
 
 		gl.enableVertexAttribArray(2);
-		gl.vertexAttribPointer(2, 4, gl.HALF_FLOAT, false, sizeofSurfel, 16);
+		gl.vertexAttribPointer(2, 4, gl.FLOAT, false, sizeofSurfel, 16);
 		gl.vertexAttribDivisor(2, 1);
 
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
-		gl.bufferData(gl.ARRAY_BUFFER, surfelColors, gl.STATIC_DRAW);
+		gl.bufferData(gl.ARRAY_BUFFER, surfelColors, gl.DYNAMIC_DRAW);
 		gl.enableVertexAttribArray(3);
-		gl.vertexAttribPointer(3, 4, gl.UNSIGNED_BYTE, true, 0, 4);
+		gl.vertexAttribPointer(3, 4, gl.UNSIGNED_BYTE, true, 0, 0);
 		gl.vertexAttribDivisor(3, 1);
 		
 		newPointCloudUpload = true;
@@ -237,8 +239,34 @@ var selectPointCloud = function() {
 	});
 }
 
+var hexToRGB = function(hex) {
+	var val = parseInt(hex.substr(1), 16);
+	var r = (val >> 16) & 255;
+	var g = (val >> 8) & 255;
+	var b = val & 255;
+	return [r, g, b];
+}
+
+var intersectDisk = function(orig, dir, tMax, center, normal, radius) {
+	var d = vec3.sub(vec3.create(), center, orig);
+	var t = vec3.dot(d, normal) / vec3.dot(dir, normal);
+	if (t > 0.0 && t < tMax) {
+		var hitP = vec3.add(d, orig, vec3.scale(d, dir, t));
+		var v = vec3.sub(vec3.create(), hitP, center);
+		var dist = vec3.len(v);
+		if (dist <= radius) {
+			return t;
+		}
+	}
+	return -1.0;
+}
+
 window.onload = function(){
 	fillDatasetSelector();
+
+	var brushRadiusSlider = document.getElementById("brushRadiusSlider");
+	var brushColorPicker = document.getElementById("brushColorPicker");
+	var brushingMode = document.getElementById("brushMode");
 
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
 	splatRadiusSlider.value = 2.5;
@@ -263,12 +291,79 @@ window.onload = function(){
 
 	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
 
+	var paintSurface = function(mouse, evt) {
+		if (numSurfels == null || !brushingMode.checked) {
+			return;
+
+		}
+
+		var screen = [(mouse[0] / WIDTH) * 2.0 - 1, 1.0 - 2.0 * (mouse[1] / HEIGHT)];
+		var screenP = vec4.set(vec4.create(), screen[0], screen[1], 1.0, 1.0);
+		var invProjView = mat4.mul(mat4.create(), proj, camera.camera);
+		mat4.invert(invProjView, invProjView);
+		var worldPos = vec4.transformMat4(vec4.create(), screenP, invProjView);
+		var dir = vec3.set(vec3.create(), worldPos[0], worldPos[1], worldPos[2]);
+		dir = vec3.normalize(dir, dir);
+
+		var orig = camera.eyePos();
+		orig = vec3.set(vec3.create(), orig[0], orig[1], orig[2]);
+		var tMax = Number.POSITIVE_INFINITY;
+		var splatCenter = vec3.create();
+		var splatNormal = vec3.create();
+		var hitSurfel = -1;
+
+		// TODO: Accelerate with a K-d tree
+		for (var i = 0; i < numSurfels; ++i) {
+			var radius = surfelPositions[8 * i + 3] * surfelDataset.scale;
+			splatCenter = vec3.set(splatCenter, surfelPositions[8 * i],
+				surfelPositions[8 * i + 1], surfelPositions[8 * i + 2]);
+			splatCenter = vec3.scale(splatCenter, splatCenter, surfelDataset.scale);
+
+			splatNormal = vec3.set(splatNormal, surfelPositions[8 * i + 4],
+				surfelPositions[8 * i + 5], surfelPositions[8 * i + 6]);
+			var t = intersectDisk(orig, dir, tMax, splatCenter, splatNormal, radius);
+			if (t >= 0.0) {
+				tMax = t;
+				hitSurfel = i;
+			}
+		}
+		if (hitSurfel != -1) {
+			var hitP = vec3.create();
+			var hitP = vec3.add(hitP, orig, vec3.scale(hitP, dir, tMax));
+
+			var brushSizeSqr = Math.pow(brushRadiusSlider.value, 2.0);
+			var brushColor = hexToRGB(brushColorPicker.value);
+
+			// Now find all neighbors within the brush radius and color them
+			// TODO: Accelerate with a K-d tree
+			var splatDist = vec3.create();
+			for (var i = 0; i < numSurfels; ++i) {
+				splatCenter = vec3.set(splatCenter, surfelPositions[8 * i],
+					surfelPositions[8 * i + 1], surfelPositions[8 * i + 2]);
+				splatCenter = vec3.scale(splatCenter, splatCenter, surfelDataset.scale);
+				splatDist = vec3.sub(splatDist, splatCenter, hitP);
+				if (vec3.sqrLen(splatDist) <= brushSizeSqr) {
+					surfelColors[4 * i] = brushColor[0];
+					surfelColors[4 * i + 1] = brushColor[1];
+					surfelColors[4 * i + 2] = brushColor[2];
+				}
+			}
+			gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
+			gl.bufferSubData(gl.ARRAY_BUFFER, 0, surfelColors);
+		}
+	};
+
 	// Register mouse and touch listeners
 	var controller = new Controller();
+	controller.press = paintSurface;
+
 	controller.mousemove = function(prev, cur, evt) {
 		if (evt.buttons == 1) {
-			camera.rotate(prev, cur);
-
+			if (!brushingMode.checked) {
+				camera.rotate(prev, cur);
+			} else {
+				paintSurface(cur, evt);
+			}
 		} else if (evt.buttons == 2) {
 			camera.pan([cur[0] - prev[0], prev[1] - cur[1]]);
 		}
