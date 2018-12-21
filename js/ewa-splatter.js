@@ -16,6 +16,7 @@ var projView = null;
 
 var vao = null;
 var splatAttribVbo = null;
+var colorsChanged = false;
 
 var tabFocused = true;
 var newPointCloudUpload = true;
@@ -211,6 +212,11 @@ var selectPointCloud = function() {
 					if (surfelDataset.url == pointClouds["Man"].url) {
 						camera.pan([0, -HEIGHT/2]);
 					}
+				}
+				if (colorsChanged) {
+					colorsChanged = false;
+					gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
+					gl.bufferSubData(gl.ARRAY_BUFFER, 0, surfelColors);
 				}
 				projView = mat4.mul(projView, proj, camera.camera);
 
@@ -410,6 +416,7 @@ window.onload = function() {
 					surfelColors[4 * i + 2] = brushColor[2];
 				}
 			}
+			colorsChanged = true;
 			gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
 			gl.bufferSubData(gl.ARRAY_BUFFER, 0, surfelColors);
 		}
