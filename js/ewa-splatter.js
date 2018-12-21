@@ -25,11 +25,15 @@ var splatRenderTargets = null;
 var splatAccumFbo = null
 var normalizationPassShader = null;
 
+const sizeofSurfel = 32;
+const sizeofKdNode = 8;
+var numSurfels = null;
 var surfelBuffer = null;
 var surfelDataset = null;
 var surfelPositions = null;
 var surfelColors = null;
-var numSurfels = null;
+
+var kdTree = null;
 
 var splatRadiusSlider = null;
 
@@ -43,8 +47,8 @@ const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 var pointClouds = {
 	"Test": {
 		//url: "dinosaur2.rsf",
-		url: "painted_santa2.rsf",
-		scale: 1.0/30.0,
+		url: "painted_santa2_kd.rsf",
+		scale: 1.0,
 		size: 3637488,
 		zoom_start: -30,
 		testing: true,
@@ -151,15 +155,21 @@ var loadPointCloud = function(dataset, onload) {
 
 var selectPointCloud = function() {
 	var selection = document.getElementById("datasets").value;
-	console.log(selection);
 	history.replaceState(history.state, "#" + selection, "#" + selection);
 
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
-		var sizeofSurfel = 32;
 		var header = new Uint32Array(dataBuffer, 0, 4);
-		numSurfels = header[0]
-		surfelPositions = new Float32Array(dataBuffer, 4, numSurfels * (sizeofSurfel / 4));
-		surfelColors = new Uint8Array(dataBuffer, 4 + numSurfels * sizeofSurfel);
+		var bounds = new Float32Array(dataBuffer, 16, 6);
+		console.log(header);
+
+		numSurfels = header[0];
+		surfelPositions = new Float32Array(dataBuffer, header[1], numSurfels * (sizeofSurfel / 4));
+		surfelColors = new Uint8Array(dataBuffer, header[1] + numSurfels * sizeofSurfel);
+
+		var numKdNodes = header[2];
+		var kdNodes = new Uint32Array(dataBuffer, 40, numKdNodes * 2);
+		var kdPrimIndices = new Uint32Array(dataBuffer, 40 + numKdNodes * sizeofKdNode, header[3]);
+		kdTree = new KdTree(numKdNodes, kdNodes, kdPrimIndices, bounds, surfelPositions);
 
 		var firstUpload = !splatAttribVbo;
 		if (firstUpload) {
@@ -274,20 +284,6 @@ var hexToRGB = function(hex) {
 	return [r, g, b];
 }
 
-var intersectDisk = function(orig, dir, tMax, center, normal, radius) {
-	var d = vec3.sub(vec3.create(), center, orig);
-	var t = vec3.dot(d, normal) / vec3.dot(dir, normal);
-	if (t > 0.0 && t < tMax) {
-		var hitP = vec3.add(d, orig, vec3.scale(d, dir, t));
-		var v = vec3.sub(vec3.create(), hitP, center);
-		var dist = vec3.len(v);
-		if (dist <= radius) {
-			return t;
-		}
-	}
-	return -1.0;
-}
-
 var saveModel = function() {
 	var blob = new Blob([surfelBuffer], {type: "application/byte-stream"});
 	var name = surfelDataset.url;
@@ -375,11 +371,9 @@ window.onload = function() {
 
 		var orig = camera.eyePos();
 		orig = vec3.set(vec3.create(), orig[0], orig[1], orig[2]);
-		var tMax = Number.POSITIVE_INFINITY;
-		var splatCenter = vec3.create();
-		var splatNormal = vec3.create();
-		var hitSurfel = -1;
 
+		var hitP = kdTree.intersect(orig, dir);
+		/*
 		// TODO: Accelerate with a K-d tree
 		for (var i = 0; i < numSurfels; ++i) {
 			var radius = surfelPositions[8 * i + 3] * surfelDataset.scale;
@@ -395,16 +389,15 @@ window.onload = function() {
 				hitSurfel = i;
 			}
 		}
-		if (hitSurfel != -1) {
-			var hitP = vec3.create();
-			var hitP = vec3.add(hitP, orig, vec3.scale(hitP, dir, tMax));
-
+		*/
+		if (hitP != null) {
 			var brushSizeSqr = Math.pow(brushRadiusSlider.value, 2.0);
 			var brushColor = hexToRGB(brushColorPicker.value);
 
 			// Now find all neighbors within the brush radius and color them
 			// TODO: Accelerate with a K-d tree
 			var splatDist = vec3.create();
+			var splatCenter = vec3.create();
 			for (var i = 0; i < numSurfels; ++i) {
 				splatCenter = vec3.set(splatCenter, surfelPositions[8 * i],
 					surfelPositions[8 * i + 1], surfelPositions[8 * i + 2]);
