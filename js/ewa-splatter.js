@@ -10,6 +10,7 @@ var splatVerts = [
 var splatVbo = [];
 
 var gl = null;
+var canvas = null;
 var proj = null;
 var camera = null;
 var projView = null;
@@ -244,7 +245,9 @@ var selectPointCloud = function() {
 
 				// Draw the brush on top of the mesh, if we're brushing
 				if (brushingMode.checked && mousePos != null && kdTree != null) {
-					var screen = [(mousePos[0] / WIDTH) * 2.0 - 1, 1.0 - 2.0 * (mousePos[1] / HEIGHT)];
+					var rect = canvas.getBoundingClientRect();
+					var screen = [(mousePos[0] / rect.width) * 2.0 - 1,
+						1.0 - 2.0 * (mousePos[1] / rect.height)];
 					var screenP = vec4.set(vec4.create(), screen[0], screen[1], 1.0, 1.0);
 					var invProjView = mat4.invert(mat4.create(), projView);
 					var worldPos = vec4.transformMat4(vec4.create(), screenP, invProjView);
@@ -361,7 +364,7 @@ window.onload = function() {
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
 	splatRadiusSlider.value = 2.5;
 
-	var canvas = document.getElementById("glcanvas");
+	canvas = document.getElementById("glcanvas");
 	gl = canvas.getContext("webgl2");
 	if (!gl) {
 		alert("Unable to initialize WebGL2. Your browser may not support it");
@@ -372,8 +375,8 @@ window.onload = function() {
 		return;
 	}
 
-	WIDTH = canvas.getAttribute("width");
-	HEIGHT = canvas.getAttribute("height");
+	WIDTH = canvas.width;
+	HEIGHT = canvas.height;
 
 	proj = mat4.perspective(mat4.create(), 60 * Math.PI / 180.0,
 		WIDTH / HEIGHT, 0.1, 500);
@@ -382,12 +385,16 @@ window.onload = function() {
 	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
 
 	var paintSurface = function(mouse, evt) {
+		mousePos = mouse;
 		if (numSurfels == null || !brushingMode.checked) {
 			return;
 
 		}
+		// We need to use the actual canvas rect here to scale the mouse
+		// positions, since it may be smaller (if on a small screen)
 
-		var screen = [(mouse[0] / WIDTH) * 2.0 - 1, 1.0 - 2.0 * (mouse[1] / HEIGHT)];
+		var rect = canvas.getBoundingClientRect();
+		var screen = [(mouse[0] / rect.width) * 2.0 - 1, 1.0 - 2.0 * (mouse[1] / rect.height)];
 		var screenP = vec4.set(vec4.create(), screen[0], screen[1], 1.0, 1.0);
 		var invProjView = mat4.mul(mat4.create(), proj, camera.camera);
 		mat4.invert(invProjView, invProjView);
