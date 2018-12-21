@@ -8,7 +8,9 @@ and *High-Quality Point-Based Rendering on Modern GPUs* by Botsch and Kobbelt, w
 The renderer uses an arcball camera which supports mouse or touch input,
 and downloads datasets via XMLHttpRequest from Dropbox when selected.
 
-Uses [webgl-util](https://github.com/Twinklebear/webgl-util) for some WebGL utilities and [glMatrix](http://glmatrix.net/) for matrix/vector operations.
+Uses [webgl-util](https://github.com/Twinklebear/webgl-util) for some WebGL utilities,
+[glMatrix](http://glmatrix.net/) for matrix/vector operations, and
+[FileSaver.js](https://github.com/eligrey/FileSaver.js/) for saving models.
 
 ## Images
 

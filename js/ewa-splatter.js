@@ -93,43 +93,64 @@ var pointClouds = {
 };
 
 var loadPointCloud = function(dataset, onload) {
-	var url = "https://www.dl.dropboxusercontent.com/s/" + dataset.url + "?dl=1";
-	if (dataset.testing) {
-		url = dataset.url;
-	}
-	var req = new XMLHttpRequest();
 	var loadingProgressText = document.getElementById("loadingText");
 	var loadingProgressBar = document.getElementById("loadingProgressBar");
-
 	loadingProgressText.innerHTML = "Loading Dataset";
 	loadingProgressBar.setAttribute("style", "width: 0%");
 
-	req.open("GET", url, true);
-	req.responseType = "arraybuffer";
-	req.onprogress = function(evt) {
-		var percent = evt.loaded / dataset.size * 100;
-		loadingProgressBar.setAttribute("style", "width: " + percent.toFixed(2) + "%");
-	};
-	req.onerror = function(evt) {
+	var errFcn = function() {
 		loadingProgressText.innerHTML = "Error Loading Dataset";
 		loadingProgressBar.setAttribute("style", "width: 0%");
 	};
-	req.onload = function(evt) {
-		loadingProgressText.innerHTML = "Loaded Dataset";
-		loadingProgressBar.setAttribute("style", "width: 100%");
-		var buffer = req.response;
-		if (buffer) {
-			onload(dataset, buffer);
-		} else {
-			alert("Unable to load buffer properly from volume?");
-			console.log("no buffer?");
+
+	if (!dataset.file) {
+		var url = "https://www.dl.dropboxusercontent.com/s/" + dataset.url + "?dl=1";
+		if (dataset.testing) {
+			url = dataset.url;
 		}
-	};
-	req.send();
+		var req = new XMLHttpRequest();
+
+		req.open("GET", url, true);
+		req.responseType = "arraybuffer";
+		req.onprogress = function(evt) {
+			var percent = evt.loaded / dataset.size * 100;
+			loadingProgressBar.setAttribute("style", "width: " + percent.toFixed(2) + "%");
+		};
+		req.onerror = errFcn;
+		req.onload = function(evt) {
+			loadingProgressText.innerHTML = "Loaded Dataset";
+			loadingProgressBar.setAttribute("style", "width: 100%");
+			var buffer = req.response;
+			if (buffer) {
+				onload(dataset, buffer);
+			} else {
+				alert("Unable to load buffer properly from volume?");
+				console.log("no buffer?");
+			}
+		};
+		req.send();
+	} else {
+		var reader = new FileReader();
+		reader.onerror = errFcn;
+		reader.onload = function(evt) {
+			loadingProgressText.innerHTML = "Loaded Dataset";
+			loadingProgressBar.setAttribute("style", "width: 100%");
+			var buffer = reader.result;
+			console.log(buffer);
+			if (buffer) {
+				onload(dataset, buffer);
+			} else {
+				alert("Unable to load buffer properly from volume?");
+				console.log("no buffer?");
+			}
+		};
+		reader.readAsArrayBuffer(dataset.file);
+	}
 }
 
 var selectPointCloud = function() {
 	var selection = document.getElementById("datasets").value;
+	console.log(selection);
 	history.replaceState(history.state, "#" + selection, "#" + selection);
 
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
@@ -261,12 +282,53 @@ var intersectDisk = function(orig, dir, tMax, center, normal, radius) {
 	return -1.0;
 }
 
-window.onload = function(){
+var saveModel = function() {
+	var blob = new Blob([surfelBuffer], {type: "application/byte-stream"});
+	var name = surfelDataset.url;
+	var fnd = surfelDataset.url.indexOf("/");
+	if (fnd != -1) {
+		name = surfelDataset.url.substr(fnd);
+	}
+	saveAs(blob, name);
+}
+
+var uploadModel = function(files) {
+	console.log(files);
+	var file = files[0];
+	pointClouds["uploaded_" + file.name] = {
+		file: file,
+		url: file.name,
+		size: file.size,
+		zoom_start: -10,
+		scale: 1.0/30.0,
+	}
+	var selector = document.getElementById("datasets");
+	var opt = document.createElement("option");
+	opt.value = "uploaded_" + file.name;
+	opt.innerHTML = "Uploaded: " + file.name;
+	selector.appendChild(opt);
+	selector.value = opt.value;
+	selectPointCloud();
+}
+
+window.onload = function() {
 	fillDatasetSelector();
 
 	var brushRadiusSlider = document.getElementById("brushRadiusSlider");
 	var brushColorPicker = document.getElementById("brushColorPicker");
 	var brushingMode = document.getElementById("brushMode");
+
+	document.addEventListener("keydown", function(evt) {
+		if (evt.key == "Control") {
+			brushingMode.checked = true;
+		}
+	});
+
+	document.addEventListener("keyup", function(evt) {
+		if (evt.key == "Control") {
+			brushingMode.checked = false;
+		}
+	});
 
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
 	splatRadiusSlider.value = 2.5;

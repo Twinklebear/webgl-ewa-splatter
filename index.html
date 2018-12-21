@@ -17,17 +17,18 @@
 				<canvas id="glcanvas" class="img-fluid" width="640" height="480"></canvas>
 			</div>
 			<div class="mx-auto col-12 col-lg-8 row">
-				<div class="col-12 mb-2 row">
-					<div class="col-6">
+				<div class="col-12 row">
+					<div class="col-12">
 						Dataset: <select id="datasets" onchange="selectPointCloud()"></select>
 					</div>
-					<div class="col-6">
+					<div class="col-12">
 						Number of splats: <span id="numSplats"></span>
 					</div>
 				</div>
 				<div class="col-12 mt-lg-2 mt-0">
 					<h4>Controls</h4>
-					<p>Mouse Controls: Left-click + drag to rotate, scroll to zoom, right-click + drag to pan.
+					<p>Mouse Controls: Left-click + drag to rotate, scroll to zoom,
+					right-click + drag to pan.
 					<br/>
 					Touch Controls: One finger drag to rotate, pinch to zoom, two finger drag to pan.
 					<br/>
@@ -47,6 +48,17 @@
 
 						<label for="brushColorPicker">Brush Color</label>
 						<input type="color" class="form-control" value="#0000ff" id="brushColorPicker">
+					</div>
+					<div class="col-12 row">
+						<div class="col-6">
+							<button type="button" class="btn btn-primary"
+								onclick="saveModel();">Save Model</button>
+						</div>
+						<div class="col-6">
+							<input type="file" class="custom-file-input" id="uploadModel" accept="*.rsf"
+								onchange="uploadModel(this.files);">
+							<label class="custom-file-label" for="uploadModel">Upload Model</label>
+						</div>
 					</div>
 					</p>
 					<p id="loadingText"></p>
@@ -86,6 +98,7 @@
 	<script src="js/gl-matrix-min.js"></script>
 	<script src="js/webgl-util.js"></script>
 	<script src="js/shader-srcs.js"></script>
+	<script src="js/FileSaver.js"></script>
 	<script src="js/ewa-splatter.js"></script>
 </body>
 </html>
