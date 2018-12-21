@@ -24,6 +24,7 @@ var splatShader = null;
 var splatRenderTargets = null;
 var splatAccumFbo = null
 var normalizationPassShader = null;
+var brushShader = null;
 
 const sizeofSurfel = 32;
 const sizeofKdNode = 8;
@@ -36,6 +37,10 @@ var surfelColors = null;
 var kdTree = null;
 
 var splatRadiusSlider = null;
+var brushRadiusSlider = null;
+var brushColorPicker = null;
+var brushingMode = null;
+var mousePos = null;
 
 // For the render time targetting we could do progressive
 // rendering of the splats, or render at a lower resolution
@@ -46,55 +51,46 @@ const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 
 var pointClouds = {
 	"Test": {
-		//url: "dinosaur2.rsf",
-		//url: "painted_santa2_kd.rsf",
+		url: "painted_santa2_kd.rsf",
 		//url: "dinosaur_kd.rsf",
 		//url: "Sankt_Johann_B2_kd.rsf",
-		url: "utah_cs_bldg_kd.rsf",
-		scale: 1.0,
+		//url: "utah_cs_bldg_kd.rsf",
 		size: 3637488,
 		zoom_start: -30,
 		testing: true,
 	},
 	"Dinosaur": {
 		url: "erx9893x0olqbfq/dinosaur.rsf",
-		scale: 1.0/30.0,
 		size: 2697312,
 		zoom_start: -40,
 	},
 	"Leo": {
 		url: "h4kradxo3lbtar8/leo.rsf",
-		scale: 50,
 		size: 2708256,
 		zoom_start: -8,
 	},
 	"Santa": {
 		url: "m6yri2u10qs31pm/painted_santa.rsf",
-		scale: 1.0/30.0,
 		size: 3637488,
 		zoom_start: -30,
 	},
 	"Igea": {
 		url: "v0xl67jgo4x5pxd/igea.rsf",
-		scale: 1.0/40.0,
 		size: 6448560,
 		zoom_start: -70,
 	},
 	"Man": {
 		url: "yfk9l8rweuk2m51/male.rsf",
-		scale: 1.0/30.0,
 		size: 7110624,
 		zoom_start: -40,
 	},
 	"Sankt Johann": {
 		url: "7db4xlbhnl2muzv/Sankt_Johann_B2.rsf",
-		scale: 1.0/200.0,
 		size: 11576112,
 		zoom_start: -40,
 	},
 	"Warnock Engineering Building": {
 		url: "xxkw3lp3m3rnn9g/utah_cs_bldg.rsf",
-		scale: 1.0/10.0,
 		size: 13677168,
 		zoom_start: -50,
 	}
@@ -232,7 +228,6 @@ var selectPointCloud = function() {
 				projView = mat4.mul(projView, proj, camera.camera);
 
 				splatShader.use();
-				gl.uniform1f(splatShader.uniforms["scaling"], surfelDataset.scale);
 				gl.uniformMatrix4fv(splatShader.uniforms["proj_view"], false, projView);
 				gl.uniform3fv(splatShader.uniforms["eye_pos"], camera.eyePos());
 				gl.uniform1f(splatShader.uniforms["radius_scale"], splatRadiusSlider.value);
@@ -259,6 +254,41 @@ var selectPointCloud = function() {
 				var eyeDir = camera.eyeDir();
 				gl.uniform3fv(normalizationPassShader.uniforms["eye_dir"], eyeDir);
 				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+				// Draw the brush on top of the mesh, if we're brushing
+				if (brushingMode.checked && mousePos != null && kdTree != null) {
+					var screen = [(mousePos[0] / WIDTH) * 2.0 - 1, 1.0 - 2.0 * (mousePos[1] / HEIGHT)];
+					var screenP = vec4.set(vec4.create(), screen[0], screen[1], 1.0, 1.0);
+					var invProjView = mat4.invert(mat4.create(), projView);
+					var worldPos = vec4.transformMat4(vec4.create(), screenP, invProjView);
+					var dir = vec3.set(vec3.create(), worldPos[0], worldPos[1], worldPos[2]);
+					dir = vec3.normalize(dir, dir);
+
+					var orig = camera.eyePos();
+					orig = vec3.set(vec3.create(), orig[0], orig[1], orig[2]);
+
+					var hit = kdTree.intersect(orig, dir);
+					if (hit != null) {
+						hitP = hit[0];
+						hitPrim = hit[1];
+						var brushColor = hexToRGB(brushColorPicker.value);
+						gl.disable(gl.DEPTH_TEST);
+
+						brushShader.use();
+						gl.uniformMatrix4fv(brushShader.uniforms["proj_view"], false, projView);
+						gl.uniform3f(brushShader.uniforms["brush_pos"], hitP[0], hitP[1], hitP[2]);
+						gl.uniform3f(brushShader.uniforms["brush_normal"],
+							surfelPositions[8 * hitPrim + 4],
+							surfelPositions[8 * hitPrim + 5],
+							surfelPositions[8 * hitPrim + 6]);
+						gl.uniform3f(brushShader.uniforms["brush_color"],
+							brushColor[0] / 255.0, brushColor[1] / 255.0, brushColor[2] / 255.0);
+						gl.uniform1f(brushShader.uniforms["brush_radius"], brushRadiusSlider.value * 2);
+						gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, 1);
+
+						gl.enable(gl.DEPTH_TEST);
+					}
+				}
 
 				// Wait for rendering to actually finish so we can time it
 				gl.finish();
@@ -316,9 +346,9 @@ var uploadModel = function(files) {
 window.onload = function() {
 	fillDatasetSelector();
 
-	var brushRadiusSlider = document.getElementById("brushRadiusSlider");
-	var brushColorPicker = document.getElementById("brushColorPicker");
-	var brushingMode = document.getElementById("brushMode");
+	brushRadiusSlider = document.getElementById("brushRadiusSlider");
+	brushColorPicker = document.getElementById("brushColorPicker");
+	brushingMode = document.getElementById("brushMode");
 
 	document.addEventListener("keydown", function(evt) {
 		if (evt.key == "Control") {
@@ -329,6 +359,7 @@ window.onload = function() {
 	document.addEventListener("keyup", function(evt) {
 		if (evt.key == "Control") {
 			brushingMode.checked = false;
+			mousePos = null;
 		}
 	});
 
@@ -372,8 +403,10 @@ window.onload = function() {
 		var orig = camera.eyePos();
 		orig = vec3.set(vec3.create(), orig[0], orig[1], orig[2]);
 
-		var hitP = kdTree.intersect(orig, dir);
-		if (hitP != null) {
+		var hit = kdTree.intersect(orig, dir);
+		if (hit != null) {
+			hitP = hit[0];
+			hitPrim = hit[1];
 			var brushColor = hexToRGB(brushColorPicker.value);
 			var brushedSplats = kdTree.queryNeighbors(hitP, brushRadiusSlider.value,
 				function(primID) {
@@ -392,6 +425,7 @@ window.onload = function() {
 	controller.press = paintSurface;
 
 	controller.mousemove = function(prev, cur, evt) {
+		mousePos = cur;
 		if (evt.buttons == 1) {
 			if (!brushingMode.checked) {
 				camera.rotate(prev, cur);
@@ -425,6 +459,8 @@ window.onload = function() {
 	normalizationPassShader.use();
 	gl.uniform1i(normalizationPassShader.uniforms["splat_colors"], 0)
 	gl.uniform1i(normalizationPassShader.uniforms["splat_normals"], 1)
+
+	brushShader = new Shader(brushVertShader, brushFragShader);
 
 	// Setup the render targets for the splat rendering pass
 	splatRenderTargets = [gl.createTexture(), gl.createTexture(), gl.createTexture()];

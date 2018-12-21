@@ -17,6 +17,7 @@ KdTree.prototype.intersect = function(rayOrig, rayDir) {
 	}
 
 	var tHit = Number.POSITIVE_INFINITY;
+	var hitPrim = -1;
 	var splatCenter = vec3.create();
 	var splatNormal = vec3.create();
 
@@ -82,6 +83,7 @@ KdTree.prototype.intersect = function(rayOrig, rayDir) {
 				var t = intersectDisk(rayOrig, rayDir, tHit, splatCenter, splatNormal, radius);
 				if (t >= 0.0) {
 					tHit = t;
+					hitPrim = p;
 				}
 			}
 			// Pop the next node off the stack
@@ -99,7 +101,7 @@ KdTree.prototype.intersect = function(rayOrig, rayDir) {
 	if (tHit < Number.POSITIVE_INFINITY) {
 		var hitP = vec3.create();
 		var hitP = vec3.add(hitP, rayOrig, vec3.scale(hitP, rayDir, tHit));
-		return hitP;
+		return [hitP, hitPrim];
 	}
 	return null;
 }
