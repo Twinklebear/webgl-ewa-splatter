@@ -47,7 +47,10 @@ const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 var pointClouds = {
 	"Test": {
 		//url: "dinosaur2.rsf",
-		url: "painted_santa2_kd.rsf",
+		//url: "painted_santa2_kd.rsf",
+		//url: "dinosaur_kd.rsf",
+		//url: "Sankt_Johann_B2_kd.rsf",
+		url: "utah_cs_bldg_kd.rsf",
 		scale: 1.0,
 		size: 3637488,
 		zoom_start: -30,
