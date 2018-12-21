@@ -21,8 +21,6 @@ struct PackedSurfel {
 	{}
 };
 
-// TODO: Make sure normals are normalized
-
 void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &surfels) {
 	std::ofstream fout(fname.c_str(), std::ios::binary);
 	std::vector<PackedSurfel> packed_surfs;
@@ -48,12 +46,28 @@ void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &s
 		colors.push_back(255);
 	}
 
-	surfel_bounds(glm::vec3(packed_surfs[0].x, packed_surfs[0].y, packed_surfs[0].z),
-			glm::vec3(packed_surfs[0].nx, packed_surfs[0].ny, packed_surfs[0].nz),
-			packed_surfs[0].radius);
+	std::vector<Box> bounds;
+	for (const auto &s : packed_surfs) {
+		const glm::vec3 c(s.x, s.y, s.z);
+		const glm::vec3 n(s.nx, s.ny, s.nz);
+		bounds.push_back(surfel_bounds(c, n, s.radius));
+	}
+	SplatKdTree kd_tree(bounds);
 
-	const uint32_t header = surfels.size();
-	fout.write(reinterpret_cast<const char*>(&header), sizeof(uint32_t));
+	std::array<uint32_t, 4> header = {
+		surfels.size(),
+		kd_tree.nodes.size() * sizeof(KdNode)
+			+ (4 + kd_tree.primitive_indices.size()) * sizeof(int),
+		kd_tree.nodes.size(),
+		kd_tree.primitive_indices.size()
+	};
+	fout.write(reinterpret_cast<const char*>(header.data()), sizeof(uint32_t) * header.size());
+
+	fout.write(reinterpret_cast<const char*>(kd_tree.nodes.data()),
+			sizeof(KdNode) * kd_tree.nodes.size());
+	fout.write(reinterpret_cast<const char*>(kd_tree.primitive_indices.data()),
+			sizeof(uint32_t) * kd_tree.primitive_indices.size());
+
 	fout.write(reinterpret_cast<const char*>(packed_surfs.data()),
 			sizeof(PackedSurfel) * packed_surfs.size());
 	fout.write(reinterpret_cast<const char*>(colors.data()), colors.size());

@@ -39,8 +39,13 @@ struct Surfel {
  * The colors are stored as RGBA8, the offset to the start of the colors is nsurfels * 24
  *
  * uint32 nsurfels
- * [vec3f position, float radius, vec4h normal, ...]
- * [rgba8, ...]
+ * uint32 surfels_data_offset
+ * uint32 num_kd_nodes
+ * uint32 num_kd_prim_indices
+ * [KdNode, ...] (kd tree)
+ * [uint32, ...] (prim indices)
+ * [vec3f position, float radius, vec4h normal, ...] (surfel pos/normal/radius)
+ * [rgba8, ...] (surfel colors)
  */
 void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &surfels);
 void read_raw_surfels_v2(const std::string &fname, std::vector<Surfel> &surfels);
