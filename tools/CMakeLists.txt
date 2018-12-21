@@ -5,7 +5,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
-add_library(rsf rsf_file.cpp)
+add_library(rsf rsf_file.cpp kd_tree.cpp)
 
 add_executable(rsf_updater rsf_updater.cpp)
 target_link_libraries(rsf_updater rsf)

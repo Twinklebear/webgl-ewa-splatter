@@ -3,6 +3,7 @@
 #include <array>
 #include <glm/glm.hpp>
 #include <glm/gtc/packing.hpp>
+#include "kd_tree.h"
 #include "rsf_file.h"
 
 Surfel::Surfel() : x(0), y(0), z(0), radius(1),
@@ -20,6 +21,8 @@ struct PackedSurfel {
 	{}
 };
 
+// TODO: Make sure normals are normalized
+
 void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &surfels) {
 	std::ofstream fout(fname.c_str(), std::ios::binary);
 	std::vector<PackedSurfel> packed_surfs;
@@ -33,9 +36,10 @@ void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &s
 		p.y = s.y;
 		p.z = s.z;
 		p.radius = s.radius;
-		p.nx = s.nx;
-		p.ny = s.ny;
-		p.nz = s.nz;
+		const glm::vec3 n = glm::normalize(glm::vec3(s.nx, s.ny, s.nz));
+		p.nx = n.x;
+		p.ny = n.y;
+		p.nz = n.z;
 		packed_surfs.push_back(p);
 
 		colors.push_back(static_cast<uint8_t>(clamp(s.r * 255.f, 0.f, 255.f)));
@@ -43,6 +47,11 @@ void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &s
 		colors.push_back(static_cast<uint8_t>(clamp(s.b * 255.f, 0.f, 255.f)));
 		colors.push_back(255);
 	}
+
+	surfel_bounds(glm::vec3(packed_surfs[0].x, packed_surfs[0].y, packed_surfs[0].z),
+			glm::vec3(packed_surfs[0].nx, packed_surfs[0].ny, packed_surfs[0].nz),
+			packed_surfs[0].radius);
+
 	const uint32_t header = surfels.size();
 	fout.write(reinterpret_cast<const char*>(&header), sizeof(uint32_t));
 	fout.write(reinterpret_cast<const char*>(packed_surfs.data()),
