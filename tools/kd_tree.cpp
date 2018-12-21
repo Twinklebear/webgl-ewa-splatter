@@ -49,7 +49,12 @@ std::ostream& operator<<(std::ostream &os, const Box &b) {
 }
 
 Box surfel_bounds(const glm::vec3 &center, const glm::vec3 &normal, const float radius) {
-	glm::vec3 ax0 = glm::normalize(glm::cross(normal, glm::vec3(1, 0, 0)));
+	glm::vec3 ax0;
+	if (std::abs(normal.x) > std::abs(normal.y)) {
+		ax0 = glm::normalize(glm::cross(normal, glm::vec3(1, 0, 0)));
+	} else {
+		ax0 = glm::normalize(glm::cross(normal, glm::vec3(0, 1, 0)));
+	}
 	glm::vec3 ax1 = glm::normalize(glm::cross(normal, ax0));
 	ax0 = glm::normalize(glm::cross(normal, ax1));
 	Box b;
@@ -92,7 +97,7 @@ SplatKdTree::SplatKdTree(std::vector<Box> inbounds)
 	std::vector<uint32_t> contained_prims(bounds.size(), 0);
 	std::iota(contained_prims.begin(), contained_prims.end(), 0);
 
-	for (const auto &b : bounds) { 
+	for (const auto &b : inbounds) { 
 		tree_bounds.box_union(b);
 	}
 	build_tree(tree_bounds, contained_prims, 0);

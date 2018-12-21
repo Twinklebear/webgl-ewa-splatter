@@ -2,7 +2,7 @@
 #include <iostream>
 #include <array>
 #include <glm/glm.hpp>
-#include <glm/gtc/packing.hpp>
+#include <glm/ext.hpp>
 #include "kd_tree.h"
 #include "rsf_file.h"
 
@@ -35,6 +35,9 @@ void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &s
 		p.z = s.z;
 		p.radius = s.radius;
 		const glm::vec3 n = glm::normalize(glm::vec3(s.nx, s.ny, s.nz));
+		if (glm::any(glm::isnan(n))) {
+			continue;
+		}
 		p.nx = n.x;
 		p.ny = n.y;
 		p.nz = n.z;
@@ -55,7 +58,7 @@ void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &s
 	SplatKdTree kd_tree(bounds);
 
 	std::array<uint32_t, 4> header = {
-		surfels.size(),
+		packed_surfs.size(),
 		kd_tree.nodes.size() * sizeof(KdNode)
 			+ (4 + kd_tree.primitive_indices.size()) * sizeof(uint32_t)
 			+ sizeof(Box),

@@ -145,6 +145,9 @@ int main(int argc, char **argv) {
 		s.nx = (*normals)[i].normal_x;
 		s.ny = (*normals)[i].normal_y;
 		s.nz = (*normals)[i].normal_z;
+		if (std::isnan(s.nx) || std::isnan(s.ny) || std::isnan(s.nz)) {
+			continue;
+		}
 
 		const uint32_t rgb = *reinterpret_cast<const int*>(&pclpt.rgb);
 		s.r = ((rgb >> 16) & 0x0000ff) / 255.0;
