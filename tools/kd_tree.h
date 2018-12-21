@@ -6,6 +6,7 @@
 
 enum AXIS {X, Y, Z};
 
+#pragma pack(1)
 struct Box {
 	glm::vec3 lower, upper;
 
@@ -54,6 +55,7 @@ struct KdNode {
 /* A very simple median-split kd tree
  */
 struct SplatKdTree {
+	Box tree_bounds;
 	std::vector<Box> bounds;
 	std::vector<KdNode> nodes;
 	std::vector<uint32_t> primitive_indices;

@@ -42,7 +42,8 @@ struct Surfel {
  * uint32 surfels_data_offset
  * uint32 num_kd_nodes
  * uint32 num_kd_prim_indices
- * [KdNode, ...] (kd tree)
+ * box3f kd_tree_bounds
+ * [KdNode, ...] (kd tree nodes)
  * [uint32, ...] (prim indices)
  * [vec3f position, float radius, vec4h normal, ...] (surfel pos/normal/radius)
  * [rgba8, ...] (surfel colors)

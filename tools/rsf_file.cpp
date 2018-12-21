@@ -57,11 +57,13 @@ void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &s
 	std::array<uint32_t, 4> header = {
 		surfels.size(),
 		kd_tree.nodes.size() * sizeof(KdNode)
-			+ (4 + kd_tree.primitive_indices.size()) * sizeof(int),
+			+ (4 + kd_tree.primitive_indices.size()) * sizeof(uint32_t)
+			+ sizeof(Box),
 		kd_tree.nodes.size(),
 		kd_tree.primitive_indices.size()
 	};
 	fout.write(reinterpret_cast<const char*>(header.data()), sizeof(uint32_t) * header.size());
+	fout.write(reinterpret_cast<const char*>(&kd_tree.tree_bounds), sizeof(Box));
 
 	fout.write(reinterpret_cast<const char*>(kd_tree.nodes.data()),
 			sizeof(KdNode) * kd_tree.nodes.size());

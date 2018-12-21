@@ -92,7 +92,6 @@ SplatKdTree::SplatKdTree(std::vector<Box> inbounds)
 	std::vector<uint32_t> contained_prims(bounds.size(), 0);
 	std::iota(contained_prims.begin(), contained_prims.end(), 0);
 
-	Box tree_bounds;
 	for (const auto &b : bounds) { 
 		tree_bounds.box_union(b);
 	}
