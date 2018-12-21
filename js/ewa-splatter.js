@@ -51,7 +51,7 @@ const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 
 var pointClouds = {
 	"Test": {
-		url: "painted_santa2_kd.rsf",
+		url: "painted_santa_kd.rsf",
 		//url: "dinosaur_kd.rsf",
 		//url: "Sankt_Johann_B2_kd.rsf",
 		//url: "utah_cs_bldg_kd.rsf",
@@ -154,8 +154,11 @@ var loadPointCloud = function(dataset, onload) {
 var selectPointCloud = function() {
 	var selection = document.getElementById("datasets").value;
 	history.replaceState(history.state, "#" + selection, "#" + selection);
+	var loadingInfo = document.getElementById("loadingInfo");
+	loadingInfo.style.display = "block";
 
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
+		loadingInfo.style.display = "none";
 		var header = new Uint32Array(dataBuffer, 0, 4);
 		var bounds = new Float32Array(dataBuffer, 16, 6);
 
@@ -313,6 +316,16 @@ var hexToRGB = function(hex) {
 	var g = (val >> 8) & 255;
 	var b = val & 255;
 	return [r, g, b];
+}
+
+var fillColor = function() {
+	var brushColor = hexToRGB(brushColorPicker.value);
+	for (var i = 0; i < numSurfels; ++i) {
+		surfelColors[4 * i] = brushColor[0];
+		surfelColors[4 * i + 1] = brushColor[1];
+		surfelColors[4 * i + 2] = brushColor[2];
+	}
+	colorsChanged = true;
 }
 
 var saveModel = function() {
