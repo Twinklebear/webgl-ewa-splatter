@@ -50,49 +50,33 @@ var HEIGHT = 480;
 const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 
 var pointClouds = {
-	"Test": {
-		url: "painted_santa_kd.rsf",
-		//url: "dinosaur_kd.rsf",
-		//url: "Sankt_Johann_B2_kd.rsf",
-		//url: "utah_cs_bldg_kd.rsf",
-		size: 3637488,
-		zoom_start: -30,
-		testing: true,
-	},
 	"Dinosaur": {
-		url: "erx9893x0olqbfq/dinosaur.rsf",
-		size: 2697312,
-		zoom_start: -40,
+		url: "e4l0qdy43ttvb87/dinosaur_kd.rsf",
+		size: 2448388,
 	},
 	"Leo": {
-		url: "h4kradxo3lbtar8/leo.rsf",
-		size: 2708256,
-		zoom_start: -8,
+		url: "k78e3vzl97tir7y/leo_kd.rsf",
+		size: 2501144,
 	},
 	"Santa": {
-		url: "m6yri2u10qs31pm/painted_santa.rsf",
-		size: 3637488,
-		zoom_start: -30,
+		url: "8ktn1ac8v2dxhui/painted_santa_kd.rsf",
+		size: 3265940,
 	},
 	"Igea": {
-		url: "v0xl67jgo4x5pxd/igea.rsf",
-		size: 6448560,
-		zoom_start: -70,
+		url: "f7h4m35crhs4lnj/igea_kd.rsf",
+		size: 5805644,
 	},
 	"Man": {
-		url: "yfk9l8rweuk2m51/male.rsf",
-		size: 7110624,
-		zoom_start: -40,
+		url: "bwbhyri4iexxrvm/man_kd.rsf",
+		size: 6345236,
 	},
 	"Sankt Johann": {
-		url: "7db4xlbhnl2muzv/Sankt_Johann_B2.rsf",
-		size: 11576112,
-		zoom_start: -40,
+		url: "af12ofenxidqa67/Sankt_Johann_B2_kd.rsf",
+		size: 10568784,
 	},
 	"Warnock Engineering Building": {
-		url: "xxkw3lp3m3rnn9g/utah_cs_bldg.rsf",
-		size: 13677168,
-		zoom_start: -50,
+		url: "cd7trfzevc1s9js/utah_cs_bldg_kd.rsf",
+		size: 12437888,
 	}
 };
 
@@ -217,7 +201,7 @@ var selectPointCloud = function() {
 				// Reset the sampling rate and camera for new volumes
 				if (newPointCloudUpload) {
 					camera = new ArcballCamera(center, 100, [WIDTH, HEIGHT]);
-					camera.zoom(surfelDataset.zoom_start);
+					camera.zoom(-30);
 					// Pan the man down some
 					if (surfelDataset.url == pointClouds["Man"].url) {
 						camera.pan([0, -HEIGHT/2]);
@@ -333,7 +317,7 @@ var saveModel = function() {
 	var name = surfelDataset.url;
 	var fnd = surfelDataset.url.indexOf("/");
 	if (fnd != -1) {
-		name = surfelDataset.url.substr(fnd);
+		name = surfelDataset.url.substr(fnd + 1);
 	}
 	saveAs(blob, name);
 }
@@ -344,8 +328,6 @@ var uploadModel = function(files) {
 		file: file,
 		url: file.name,
 		size: file.size,
-		zoom_start: -10,
-		scale: 1.0/30.0,
 	}
 	var selector = document.getElementById("datasets");
 	var opt = document.createElement("option");
