@@ -104,6 +104,72 @@ KdTree.prototype.intersect = function(rayOrig, rayDir) {
 	return null;
 }
 
+KdTree.prototype.queryNeighbors = function(pos, radius, callback) {
+	if (!boxContainsPoint(this.bounds, pos)) {
+		return;
+	}
+
+	var radiusSqr = Math.pow(radius, 2.0);
+	var splatCenter = vec3.create();
+	var splatDist = vec3.create();
+
+	const maxNodeStack = 64;
+	// The node indices to traverse next
+	var nodeStack = new Uint32Array(maxNodeStack);
+	var stackPos = 0;
+	var currentNode = 0;
+	while (true) {
+		if (!nodeIsLeaf(this.nodes, currentNode)) {
+			// See which child nodes are touched by the query
+			var splitAxis = nodeSplitAxis(this.nodes, currentNode);
+			var splitPos = nodeSplitPos(this.nodesFloatView, currentNode);
+			var distToSplitSqr = Math.pow(pos[splitAxis] - splitPos, 2.0);
+
+			// Find which child we should traverse first, the low side (left)
+			// or the upper side (right) 
+			var leftFirst = pos[splitAxis] < splitPos;
+			var firstChild, secondChild;
+			if (leftFirst) {
+				firstChild = currentNode + 1;
+				secondChild = nodeRightChild(this.nodes, currentNode);
+			} else {
+				firstChild = nodeRightChild(this.nodes, currentNode);
+				secondChild = currentNode + 1;
+			}
+
+			// If we're entirely on one side, just traverse that side
+			if (Math.abs(distToSplitSqr) > radiusSqr) {
+				currentNode = firstChild;
+			} else {
+				// We need to do both, push the second child on and traverse the first
+				nodeStack[stackPos] = secondChild;
+				stackPos += 1;
+				currentNode = firstChild;
+			}
+		} else {
+			// It's a leaf, find which primitives are in the query radius
+			var offset = nodePrimIndicesOffset(this.nodes, currentNode);
+			for (var i = 0; i < nodeNumPrims(this.nodes, currentNode); ++i) {
+				var p = this.primIndices[i + offset];
+				var radius = this.surfels[8 * p + 3];
+				splatCenter = vec3.set(splatCenter, this.surfels[8 * p],
+					this.surfels[8 * p + 1], this.surfels[8 * p + 2]);
+				splatDist = vec3.sub(splatDist, splatCenter, pos);
+				if (vec3.sqrLen(splatDist) <= radiusSqr) {
+					callback(p);
+				}
+			}
+			// Pop the next node off the stack
+			if (stackPos > 0) {
+				stackPos -= 1;
+				currentNode = nodeStack[stackPos];
+			} else {
+				break;
+			}
+		}
+	}
+}
+
 var intersectBox = function(box, rayOrig, invDir, negDir) {
 	// Check X & Y intersection
 	var tmin = (box[3 * negDir[0]] - rayOrig[0]) * invDir[0];
@@ -141,6 +207,12 @@ var intersectBox = function(box, rayOrig, invDir, negDir) {
 		tmin = 0;
 	}
 	return [tmin, tmax];
+}
+
+var boxContainsPoint = function(box, point) {
+	return point[0] >= box[0] && point[0] <= box[3]
+		&& point[1] >= box[1] && point[1] <= box[4]
+		&& point[2] >= box[2] && point[2] <= box[5];
 }
 
 var intersectDisk = function(orig, dir, tMax, center, normal, radius) {

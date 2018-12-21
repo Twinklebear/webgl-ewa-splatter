@@ -141,7 +141,6 @@ var loadPointCloud = function(dataset, onload) {
 			loadingProgressText.innerHTML = "Loaded Dataset";
 			loadingProgressBar.setAttribute("style", "width: 100%");
 			var buffer = reader.result;
-			console.log(buffer);
 			if (buffer) {
 				onload(dataset, buffer);
 			} else {
@@ -160,7 +159,6 @@ var selectPointCloud = function() {
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
 		var header = new Uint32Array(dataBuffer, 0, 4);
 		var bounds = new Float32Array(dataBuffer, 16, 6);
-		console.log(header);
 
 		numSurfels = header[0];
 		surfelPositions = new Float32Array(dataBuffer, header[1], numSurfels * (sizeofSurfel / 4));
@@ -295,7 +293,6 @@ var saveModel = function() {
 }
 
 var uploadModel = function(files) {
-	console.log(files);
 	var file = files[0];
 	pointClouds["uploaded_" + file.name] = {
 		file: file,
@@ -373,42 +370,14 @@ window.onload = function() {
 		orig = vec3.set(vec3.create(), orig[0], orig[1], orig[2]);
 
 		var hitP = kdTree.intersect(orig, dir);
-		/*
-		// TODO: Accelerate with a K-d tree
-		for (var i = 0; i < numSurfels; ++i) {
-			var radius = surfelPositions[8 * i + 3] * surfelDataset.scale;
-			splatCenter = vec3.set(splatCenter, surfelPositions[8 * i],
-				surfelPositions[8 * i + 1], surfelPositions[8 * i + 2]);
-			splatCenter = vec3.scale(splatCenter, splatCenter, surfelDataset.scale);
-
-			splatNormal = vec3.set(splatNormal, surfelPositions[8 * i + 4],
-				surfelPositions[8 * i + 5], surfelPositions[8 * i + 6]);
-			var t = intersectDisk(orig, dir, tMax, splatCenter, splatNormal, radius);
-			if (t >= 0.0) {
-				tMax = t;
-				hitSurfel = i;
-			}
-		}
-		*/
 		if (hitP != null) {
-			var brushSizeSqr = Math.pow(brushRadiusSlider.value, 2.0);
 			var brushColor = hexToRGB(brushColorPicker.value);
-
-			// Now find all neighbors within the brush radius and color them
-			// TODO: Accelerate with a K-d tree
-			var splatDist = vec3.create();
-			var splatCenter = vec3.create();
-			for (var i = 0; i < numSurfels; ++i) {
-				splatCenter = vec3.set(splatCenter, surfelPositions[8 * i],
-					surfelPositions[8 * i + 1], surfelPositions[8 * i + 2]);
-				splatCenter = vec3.scale(splatCenter, splatCenter, surfelDataset.scale);
-				splatDist = vec3.sub(splatDist, splatCenter, hitP);
-				if (vec3.sqrLen(splatDist) <= brushSizeSqr) {
-					surfelColors[4 * i] = brushColor[0];
-					surfelColors[4 * i + 1] = brushColor[1];
-					surfelColors[4 * i + 2] = brushColor[2];
-				}
-			}
+			var brushedSplats = kdTree.queryNeighbors(hitP, brushRadiusSlider.value,
+				function(primID) {
+					surfelColors[4 * primID] = brushColor[0];
+					surfelColors[4 * primID + 1] = brushColor[1];
+					surfelColors[4 * primID + 2] = brushColor[2];
+			});
 			colorsChanged = true;
 			gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
 			gl.bufferSubData(gl.ARRAY_BUFFER, 0, surfelColors);
