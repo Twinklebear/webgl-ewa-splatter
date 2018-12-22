@@ -186,12 +186,18 @@ out vec4 color;
 #line 187
 void main(void) {
 	// Draw the brush as a colored ring
-	highp float len = length(uv);
+	float len = length(uv);
 	if (len > 1.0 || len < 0.8) {
 		discard;
 	}
 	if (len >= 0.95 || len <= 0.85) {
-		color.rgb = vec3(0.0);
+		float luminance = 0.2126 * brush_color.r
+			+ 0.7152 * brush_color.g + 0.0722 * brush_color.b;
+		if (luminance > 0.2) {
+			color.rgb = vec3(0.0);
+		} else {
+			color.rgb = vec3(1.0);
+		}
 	} else {
 		color.rgb = brush_color;
 	}
