@@ -18,10 +18,10 @@
 			</div>
 			<div class="mx-auto col-12 col-lg-8 row">
 				<div class="col-12 row">
-					<div class="col-12">
+					<div class="col-6">
 						Dataset: <select id="datasets" onchange="selectPointCloud()"></select>
 					</div>
-					<div class="col-12">
+					<div class="col-6 text-right">
 						Number of splats: <span id="numSplats"></span>
 					</div>
 					<div class="col-12" id="loadingInfo">
@@ -33,18 +33,22 @@
 					</div>
 				</div>
 				<div class="col-12 mt-lg-2 mt-0">
-					<h4>Controls</h4>
-					<p>Desktop: Left-click + drag to rotate, scroll to zoom,
-					right-click + drag to pan. Hold Ctrl or use the checkbox to
-					toggle brushing, and left-click + drag to paint while brushing.
-					<br/>
-					Touch: One finger drag to rotate, pinch to zoom, two finger drag to pan.
-					Check the brushing mode checkbox to enable brushing.
-					<br/>
 					<div class="form-group col-12 row">
-						<div class="col-12">
-							<input type="checkbox" class="form-check-input" value="" id="brushMode">
-							<label class="form-check-label" for="brushMode">Toggle Brushing Mode</label>
+						<div class="form-row col-12">
+							<div class="col-4 text-center">
+								<input type="checkbox" class="form-check-input" value="" id="brushMode">
+								<label class="form-check-label" for="brushMode">
+									Toggle Brushing Mode</label>
+							</div>
+							<div class="col-4 text-center">
+								<label for="brushColorPicker">Brush Color</label>
+								<input type="color" class="form-control"
+									value="#0000ff" id="brushColorPicker">
+							</div>
+							<div class="col-4 text-center">
+								<button type="button" class="btn btn-primary mt-2"
+									onclick="fillColor();">Fill Color</button>
+							</div>
 						</div>
 						<div class="col-12">
 							<label for="splatRadiusSlider">Splat Radius</label>
@@ -56,17 +60,15 @@
 							<input type="range" class="form-control-range" id="brushRadiusSlider"
 								min="0.05" max="1.0" step="0.01">
 						</div>
-						<div class="form-row col-12 align-items-center">
-							<div class="col-lg-8 col-12">
-							<label for="brushColorPicker">Brush Color</label>
-							<input type="color" class="form-control" value="#0000ff" id="brushColorPicker">
-							</div>
-							<div class="col-lg-4 col-12 mt-lg-0 mt-2">
-								<button type="button" class="btn btn-primary"
-									onclick="fillColor();">Fill Color</button>
-							</div>
-						</div>
 					</div>
+					<h4>Controls</h4>
+					<p>Desktop: Left-click + drag to rotate, scroll to zoom,
+					right-click + drag to pan. Hold Ctrl or use the checkbox to
+					toggle brushing, and left-click + drag to paint while brushing.
+					<br/>
+					Touch: One finger drag to rotate, pinch to zoom, two finger drag to pan.
+					Check the brushing mode checkbox to enable brushing.
+					<br/>
 					<div class="col-12 row">
 						<div class="col-lg-6 col-12">
 							<button type="button" class="btn btn-primary"
