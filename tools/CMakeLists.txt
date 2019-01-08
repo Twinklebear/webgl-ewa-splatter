@@ -3,7 +3,7 @@ project(tools)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
-find_package(GLM REQUIRED)
+find_package(glm REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 add_library(rsf rsf_file.cpp kd_tree.cpp)
 

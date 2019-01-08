@@ -4,6 +4,8 @@
 #include <cmath>
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/string_cast.hpp>
 #include "kd_tree.h"
 
 Box::Box() : lower(std::numeric_limits<float>::infinity()),
@@ -40,7 +42,7 @@ AXIS Box::longest_axis() const {
 	return Z;
 }
 glm::vec3 Box::center() const {
-	return lower + glm::vec3(upper - lower) * 0.5;
+	return lower + glm::vec3(upper - lower) * 0.5f;
 }
 std::ostream& operator<<(std::ostream &os, const Box &b) {
 	os << "Box [" << glm::to_string(b.lower) << ", "
@@ -62,8 +64,8 @@ Box surfel_bounds(const glm::vec3 &center, const glm::vec3 &normal, const float 
 	b.extend(center - radius * ax0);
 	b.extend(center + radius * ax1);
 	b.extend(center - radius * ax1);
-	b.extend(center + normal * 0.0001);
-	b.extend(center - normal * 0.0001);
+	b.extend(center + normal * 0.0001f);
+	b.extend(center - normal * 0.0001f);
 	return b;
 }
 

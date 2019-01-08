@@ -87,7 +87,7 @@ void write_raw_surfels_v1(const std::string &fname, const std::vector<Surfel> &s
 void read_raw_surfels_v1(const std::string &fname, std::vector<Surfel> &surfels) {
 	std::ifstream fin(fname.c_str(), std::ios::binary | std::ios::ate);
 	const size_t size = fin.tellg();
-	fin.seekg(std::ios::beg, 0);
+	fin.seekg(0, std::ios::beg);
 	assert(size % sizeof(Surfel) == 0);
 	surfels.resize(size / sizeof(Surfel));
 	fin.read(reinterpret_cast<char*>(surfels.data()), size);
