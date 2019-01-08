@@ -35,7 +35,7 @@ struct Surfel {
  *
  * There are two uint64's, specifying the number of surfels, and the offset to the color values
  * The positions are stored as single-precision vec4's with the radius as the w component
- * The normals are stored as half-precision vec4's
+ * The normals are stored as single-precision vec4's
  * The colors are stored as RGBA8, the offset to the start of the colors is nsurfels * 24
  *
  * uint32 nsurfels
@@ -45,7 +45,7 @@ struct Surfel {
  * box3f kd_tree_bounds
  * [KdNode, ...] (kd tree nodes)
  * [uint32, ...] (prim indices)
- * [vec3f position, float radius, vec4h normal, ...] (surfel pos/normal/radius)
+ * [vec3f position, float radius, vec4f normal, ...] (surfel pos/normal/radius)
  * [rgba8, ...] (surfel colors)
  */
 void write_raw_surfels_v2(const std::string &fname, const std::vector<Surfel> &surfels);
