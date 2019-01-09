@@ -90,7 +90,7 @@ AXIS KdNode::split_axis() const {
 	return static_cast<AXIS>(num_prims & 3);
 }
 bool KdNode::is_leaf() const {
-	return num_prims & 3 == 3;
+	return (num_prims & 3) == 3;
 }
 
 SplatKdTree::SplatKdTree(std::vector<Box> inbounds)

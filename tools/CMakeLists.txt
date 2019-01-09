@@ -5,11 +5,21 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 find_package(glm REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
-add_library(rsf rsf_file.cpp kd_tree.cpp)
+add_library(rsf rsf_file.cpp kd_tree.cpp
+	streaming_kd_tree.cpp streaming_rsf_file.cpp)
+set_target_properties(rsf PROPERTIES
+	CXX_STANDARD 14
+	CXX_STANDARD_REQUIRED ON)
 
 add_executable(rsf_updater rsf_updater.cpp)
 target_link_libraries(rsf_updater rsf)
 set_target_properties(rsf_updater PROPERTIES
+	CXX_STANDARD 14
+	CXX_STANDARD_REQUIRED ON)
+
+add_executable(rsf_v1_to_streaming rsf_v1_to_streaming.cpp)
+target_link_libraries(rsf_v1_to_streaming rsf)
+set_target_properties(rsf_v1_to_streaming PROPERTIES
 	CXX_STANDARD 14
 	CXX_STANDARD_REQUIRED ON)
 

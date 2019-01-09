@@ -66,8 +66,9 @@ struct SplatKdTree {
 	SplatKdTree(std::vector<Box> bounds);
 
 private:
-	// Recursively build the tree, returns this node's index in the
-	// nodes vector when it's written in
+	/* Recursively build the tree, returns this node's index in the
+	 * nodes vector when it's written in
+	 */
 	uint32_t build_tree(const Box &node_bounds,
 			const std::vector<uint32_t> &contained_prims,
 			const int depth);
