@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -17,6 +18,16 @@ int main(int argc, char **argv) {
 
 	std::vector<Surfel> surfels;
 	read_raw_surfels_v1(argv[1], surfels);
+	auto end = std::remove_if(surfels.begin(), surfels.end(),
+		[](const Surfel &s) {
+			return !std::isnormal(s.x)
+				|| !std::isnormal(s.y)
+				|| !std::isnormal(s.z)
+				|| !std::isnormal(s.nx)
+				|| !std::isnormal(s.ny)
+				|| !std::isnormal(s.nz);
+		});
+	surfels.erase(end, surfels.end());
 	if (scale_factor > 0.0) {
 		for (auto &s : surfels) {
 			s.x *= scale_factor;
@@ -25,7 +36,6 @@ int main(int argc, char **argv) {
 			s.radius *= scale_factor;
 		}
 	}
-	surfels.resize(128);
 	write_streaming_surfels(argv[2], surfels);
 	return 1;
 }
