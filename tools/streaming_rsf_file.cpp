@@ -67,7 +67,7 @@ void write_streaming_surfels(const std::string &dirname, const std::vector<Surfe
 	//const size_t subtree_size = 1024;// * 1024;
 
 	StreamingSplatKdTree forest(surfels);
-	auto subtrees = forest.build_subtrees(forest.tree_depth / 2);
+	auto subtrees = forest.build_subtrees(forest.tree_depth / 3);
 	std::cout << "Number of subtrees to write: " << subtrees.size() << "\n";
 	for (const auto &st : subtrees) {
 		std::cout << "Writing subtree root id = " << st.root_id << "\n";
