@@ -199,6 +199,14 @@ std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth
 	std::vector<KdSubTree> subtrees;
 	// Here we want to do a breadth-first traversal down the tree, to try and group
 	// files by their level
+
+	// TODO: What we actually want to do in the end to save some disk space
+	// is to get together the list of kd trees, without making the surfel copies
+	// yet. Then, we bundle the subtrees into files, and collect the surfel subsets
+	// used by all the trees, and store the surfels once. This will help a lot with
+	// reducing the duplication of surfels we have right now. Then we re-map the
+	// primitive indices of each subtree to reference inside this shared surfel list
+
 	std::stack<size_t> todo;
 	todo.push(0);
 	while (!todo.empty()) {
