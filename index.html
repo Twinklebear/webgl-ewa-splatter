@@ -34,22 +34,6 @@
 				</div>
 				<div class="col-12 mt-lg-2 mt-0">
 					<div class="form-group col-12 row">
-						<div class="form-row col-12">
-							<div class="col-4 text-center">
-								<input type="checkbox" class="form-check-input" value="" id="brushMode">
-								<label class="form-check-label" for="brushMode">
-									Toggle Brushing Mode</label>
-							</div>
-							<div class="col-4 text-center">
-								<label for="brushColorPicker">Brush Color</label>
-								<input type="color" class="form-control"
-									value="#0000ff" id="brushColorPicker">
-							</div>
-							<div class="col-4 text-center">
-								<button type="button" class="btn btn-primary mt-2"
-									onclick="fillColor();">Fill Color</button>
-							</div>
-						</div>
 						<div class="col-12">
 							<label for="splatRadiusSlider">Splat Radius</label>
 							<input type="range" class="form-control-range" id="splatRadiusSlider"
@@ -63,23 +47,10 @@
 					</div>
 					<h4>Controls</h4>
 					<p>Desktop: Left-click + drag to rotate, scroll to zoom,
-					right-click + drag to pan. Hold Ctrl or use the checkbox to
-					toggle brushing, and left-click + drag to paint while brushing.
+					right-click + drag to pan.
 					<br/>
 					Touch: One finger drag to rotate, pinch to zoom, two finger drag to pan.
-					Check the brushing mode checkbox to enable brushing.
 					<br/>
-					<div class="col-12 row">
-						<div class="col-lg-6 col-12">
-							<button type="button" class="btn btn-primary"
-								onclick="saveModel();">Save Model</button>
-						</div>
-						<div class="col-lg-6 col-12 mt-2 mt-lg-0">
-							<input type="file" class="custom-file-input" id="uploadModel" accept="*.rsf"
-								onchange="uploadModel(this.files);">
-							<label class="custom-file-label" for="uploadModel">Upload Model</label>
-						</div>
-					</div>
 					</p>
 
 					<h4>Description</h4>

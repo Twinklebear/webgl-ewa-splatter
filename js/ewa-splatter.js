@@ -40,7 +40,6 @@ var kdTree = null;
 var splatRadiusSlider = null;
 var brushRadiusSlider = null;
 var brushColorPicker = null;
-var brushingMode = null;
 var mousePos = null;
 
 // For the render time targetting we could do progressive
@@ -318,20 +317,6 @@ window.onload = function() {
 
 	brushRadiusSlider = document.getElementById("brushRadiusSlider");
 	brushColorPicker = document.getElementById("brushColorPicker");
-	brushingMode = document.getElementById("brushMode");
-
-	document.addEventListener("keydown", function(evt) {
-		if (evt.key == "Control") {
-			brushingMode.checked = true;
-		}
-	});
-
-	document.addEventListener("keyup", function(evt) {
-		if (evt.key == "Control") {
-			brushingMode.checked = false;
-			mousePos = null;
-		}
-	});
 
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
 	splatRadiusSlider.value = 2.5;
@@ -362,9 +347,7 @@ window.onload = function() {
 	controller.mousemove = function(prev, cur, evt) {
 		mousePos = cur;
 		if (evt.buttons == 1) {
-			if (!brushingMode.checked) {
-				camera.rotate(prev, cur);
-			}
+			camera.rotate(prev, cur);
 		} else if (evt.buttons == 2) {
 			camera.pan([cur[0] - prev[0], prev[1] - cur[1]]);
 		}
