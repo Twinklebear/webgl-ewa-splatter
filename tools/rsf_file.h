@@ -54,10 +54,7 @@ void read_raw_surfels_v2(const std::string &fname, std::vector<Surfel> &surfels)
 
 
 /* The RAW surfel file format V1 (.rsf) is simply a list of
- * surfels, where each surfel is specified by 8 floats (32 bytes):
- * x, y, z, radius, nx, ny, nz, color (rgba8)
- * The number of surfels in the file is: file_size / 32
- * The alpha component of the color is unused
+ * surfels, where each surfel is specified by Surfel struct (above)
  */
 void write_raw_surfels_v1(const std::string &fname, const std::vector<Surfel> &surfels);
 void read_raw_surfels_v1(const std::string &fname, std::vector<Surfel> &surfels);

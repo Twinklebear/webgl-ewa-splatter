@@ -68,6 +68,10 @@ Surfel compute_lod_surfel(const std::vector<uint32_t> &contained_prims,
 	lod.r /= contained_prims.size();
 	lod.g /= contained_prims.size();
 	lod.b /= contained_prims.size();
+	std::cout << "LOD surfel for " << contained_prims.size() << " prims:"
+		<< "\tpos = {" << lod.x << ", " << lod.y << ", " << lod.z << "}\n"
+		<< "\tnormal = {" << lod.nx << ", " << lod.ny << ", " << lod.nz << "}\n"
+		<< "\tcolor = {" << lod.r << ", " << lod.g << ", " << lod.b << "}\n";
 	return lod;
 }
 
@@ -80,6 +84,7 @@ KdSubTree::KdSubTree(const Box &bounds, uint32_t root_id,
 	root_id(root_id),
 	nodes(std::move(subtree_nodes))
 {
+	// TODO: Qu
 	// We need to build a new primitive list and primitive indices array
 	// specific to this subtree.
 	std::cout << "Making new subtree, root id: " << root_id << "\n";
@@ -127,6 +132,7 @@ StreamingSplatKdTree::StreamingSplatKdTree(const std::vector<Surfel> &insurfels)
 		bounds.push_back(b);
 		tree_bounds.box_union(b);
 	}
+	std::cout << "Tree bounds: " << tree_bounds << "\n";
 	build_tree(tree_bounds, contained_prims, 0);
 }
 uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
@@ -184,7 +190,7 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 	// TODO: I think this is ok, since we put the LOD surfels at the end after
 	// the real surfels, they won't show up accidentally as a "real" surfel
 	Surfel lod_surfel = compute_lod_surfel(contained_prims, surfels);
-	lod_surfel.radius = glm::compMax(node_bounds.center() - node_bounds.lower);
+	lod_surfel.radius = glm::compMin(node_bounds.center() - node_bounds.lower) / 2.0;
 	surfels.push_back(lod_surfel);
 
 	std::cout << "Inner node at index " << nodes.size() << "\n";

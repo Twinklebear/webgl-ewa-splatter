@@ -18,6 +18,7 @@ void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
 	std::vector<StreamingSurfel> surfs;
 	std::vector<uint8_t> colors;
 
+	// TODO: Quantize surfel positions to the parent box bounds
 	std::cout << "Subtree has: " << tree.surfels.size() << " surfels\n" << std::flush;
 	surfs.reserve(tree.surfels.size());
 	colors.reserve(tree.surfels.size());
@@ -28,12 +29,10 @@ void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
 		p.z = glm::packHalf1x16(s.z);
 		p.radius = glm::packHalf1x16(s.radius);
 		const glm::vec3 n = glm::normalize(glm::vec3(s.nx, s.ny, s.nz));
-		if (glm::any(glm::isnan(n))) {
-			continue;
-		}
 		p.nx = glm::packHalf1x16(n.x);
 		p.ny = glm::packHalf1x16(n.y);
 		p.nz = glm::packHalf1x16(n.z);
+		p.pad = std::numeric_limits<uint16_t>::max();
 		surfs.push_back(p);
 
 		colors.push_back(static_cast<uint8_t>(clamp(s.r * 255.f, 0.f, 255.f)));
@@ -65,10 +64,10 @@ void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
 
 void write_streaming_surfels(const std::string &dirname, const std::vector<Surfel> &surfels) {
 	// For testing, limit the subtree size to be quite small (32k)
-	const size_t subtree_size = 1024;// * 1024;
+	//const size_t subtree_size = 1024;// * 1024;
 
 	StreamingSplatKdTree forest(surfels);
-	auto subtrees = forest.build_subtrees(2); //forest.tree_depth / 2);
+	auto subtrees = forest.build_subtrees(forest.tree_depth / 2);
 	std::cout << "Number of subtrees to write: " << subtrees.size() << "\n";
 	for (const auto &st : subtrees) {
 		std::cout << "Writing subtree root id = " << st.root_id << "\n";
