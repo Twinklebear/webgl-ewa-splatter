@@ -27,7 +27,7 @@ var splatAccumFbo = null
 var normalizationPassShader = null;
 var brushShader = null;
 
-const sizeofSurfel = 32;
+const sizeofSurfel = 16;
 const sizeofKdNode = 8;
 var numSurfels = null;
 var surfelBuffer = null;
@@ -51,6 +51,11 @@ var HEIGHT = 480;
 const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 
 var pointClouds = {
+	"Test": {
+		url: "tools/build/0.srsf",
+		testing: true,
+		size: 100
+	},
 	"Dinosaur": {
 		url: "e4l0qdy43ttvb87/dinosaur_kd.rsf",
 		size: 2448388,
@@ -144,17 +149,21 @@ var selectPointCloud = function() {
 
 	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
 		loadingInfo.style.display = "none";
-		var header = new Uint32Array(dataBuffer, 0, 4);
-		var bounds = new Float32Array(dataBuffer, 16, 6);
+		var header = new Uint32Array(dataBuffer, 0, 5);
+		var bounds = new Float32Array(dataBuffer, 20, 6);
 
+		console.log(header);
+		console.log(bounds);
 		numSurfels = header[0];
-		surfelPositions = new Float32Array(dataBuffer, header[1], numSurfels * (sizeofSurfel / 4));
+		surfelPositions = new Uint16Array(dataBuffer, header[1], numSurfels * (sizeofSurfel / 2));
 		surfelColors = new Uint8Array(dataBuffer, header[1] + numSurfels * sizeofSurfel);
 
+		/*
 		var numKdNodes = header[2];
-		var kdNodes = new Uint32Array(dataBuffer, 40, numKdNodes * 2);
-		var kdPrimIndices = new Uint32Array(dataBuffer, 40 + numKdNodes * sizeofKdNode, header[3]);
+		var kdNodes = new Uint32Array(dataBuffer, 44, numKdNodes * 2);
+		var kdPrimIndices = new Uint32Array(dataBuffer, 44 + numKdNodes * sizeofKdNode, header[3]);
 		kdTree = new KdTree(numKdNodes, kdNodes, kdPrimIndices, bounds, surfelPositions);
+		*/
 
 		var firstUpload = !splatAttribVbo;
 		if (firstUpload) {
@@ -166,11 +175,11 @@ var selectPointCloud = function() {
 		gl.bufferData(gl.ARRAY_BUFFER, surfelPositions, gl.STATIC_DRAW);
 
 		gl.enableVertexAttribArray(1);
-		gl.vertexAttribPointer(1, 4, gl.FLOAT, false, sizeofSurfel, 0);
+		gl.vertexAttribPointer(1, 4, gl.HALF_FLOAT, false, sizeofSurfel, 0);
 		gl.vertexAttribDivisor(1, 1);
 
 		gl.enableVertexAttribArray(2);
-		gl.vertexAttribPointer(2, 4, gl.FLOAT, false, sizeofSurfel, 16);
+		gl.vertexAttribPointer(2, 4, gl.HALF_FLOAT, false, sizeofSurfel, 8);
 		gl.vertexAttribDivisor(2, 1);
 
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
@@ -242,43 +251,6 @@ var selectPointCloud = function() {
 				var eyeDir = camera.eyeDir();
 				gl.uniform3fv(normalizationPassShader.uniforms["eye_dir"], eyeDir);
 				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-				// Draw the brush on top of the mesh, if we're brushing
-				if (brushingMode.checked && mousePos != null && kdTree != null) {
-					var rect = canvas.getBoundingClientRect();
-					var screen = [(mousePos[0] / rect.width) * 2.0 - 1,
-						1.0 - 2.0 * (mousePos[1] / rect.height)];
-					var screenP = vec4.set(vec4.create(), screen[0], screen[1], 1.0, 1.0);
-					var invProjView = mat4.invert(mat4.create(), projView);
-					var worldPos = vec4.transformMat4(vec4.create(), screenP, invProjView);
-					var dir = vec3.set(vec3.create(), worldPos[0], worldPos[1], worldPos[2]);
-					dir = vec3.normalize(dir, dir);
-
-					var orig = camera.eyePos();
-					orig = vec3.set(vec3.create(), orig[0], orig[1], orig[2]);
-
-					var hit = kdTree.intersect(orig, dir);
-					if (hit != null) {
-						hitP = hit[0];
-						hitPrim = hit[1];
-						var brushColor = hexToRGB(brushColorPicker.value);
-						gl.disable(gl.DEPTH_TEST);
-
-						brushShader.use();
-						gl.uniformMatrix4fv(brushShader.uniforms["proj_view"], false, projView);
-						gl.uniform3f(brushShader.uniforms["brush_pos"], hitP[0], hitP[1], hitP[2]);
-						gl.uniform3f(brushShader.uniforms["brush_normal"],
-							surfelPositions[8 * hitPrim + 4],
-							surfelPositions[8 * hitPrim + 5],
-							surfelPositions[8 * hitPrim + 6]);
-						gl.uniform3f(brushShader.uniforms["brush_color"],
-							brushColor[0] / 255.0, brushColor[1] / 255.0, brushColor[2] / 255.0);
-						gl.uniform1f(brushShader.uniforms["brush_radius"], brushRadiusSlider.value * 2);
-						gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, splatVerts.length / 3, 1);
-
-						gl.enable(gl.DEPTH_TEST);
-					}
-				}
 
 				// Wait for rendering to actually finish so we can time it
 				gl.finish();
@@ -384,55 +356,14 @@ window.onload = function() {
 
 	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
 
-	var paintSurface = function(mouse, evt) {
-		mousePos = mouse;
-		if (numSurfels == null || !brushingMode.checked) {
-			return;
-
-		}
-		// We need to use the actual canvas rect here to scale the mouse
-		// positions, since it may be smaller (if on a small screen)
-
-		var rect = canvas.getBoundingClientRect();
-		var screen = [(mouse[0] / rect.width) * 2.0 - 1, 1.0 - 2.0 * (mouse[1] / rect.height)];
-		var screenP = vec4.set(vec4.create(), screen[0], screen[1], 1.0, 1.0);
-		var invProjView = mat4.mul(mat4.create(), proj, camera.camera);
-		mat4.invert(invProjView, invProjView);
-		var worldPos = vec4.transformMat4(vec4.create(), screenP, invProjView);
-		var dir = vec3.set(vec3.create(), worldPos[0], worldPos[1], worldPos[2]);
-		dir = vec3.normalize(dir, dir);
-
-		var orig = camera.eyePos();
-		orig = vec3.set(vec3.create(), orig[0], orig[1], orig[2]);
-
-		var hit = kdTree.intersect(orig, dir);
-		if (hit != null) {
-			hitP = hit[0];
-			hitPrim = hit[1];
-			var brushColor = hexToRGB(brushColorPicker.value);
-			var brushedSplats = kdTree.queryNeighbors(hitP, brushRadiusSlider.value,
-				function(primID) {
-					surfelColors[4 * primID] = brushColor[0];
-					surfelColors[4 * primID + 1] = brushColor[1];
-					surfelColors[4 * primID + 2] = brushColor[2];
-			});
-			colorsChanged = true;
-			gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
-			gl.bufferSubData(gl.ARRAY_BUFFER, 0, surfelColors);
-		}
-	};
-
 	// Register mouse and touch listeners
 	var controller = new Controller();
-	controller.press = paintSurface;
 
 	controller.mousemove = function(prev, cur, evt) {
 		mousePos = cur;
 		if (evt.buttons == 1) {
 			if (!brushingMode.checked) {
 				camera.rotate(prev, cur);
-			} else {
-				paintSurface(cur, evt);
 			}
 		} else if (evt.buttons == 2) {
 			camera.pan([cur[0] - prev[0], prev[1] - cur[1]]);

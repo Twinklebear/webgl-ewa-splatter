@@ -32,7 +32,7 @@ var vertShader =
 `#version 300 es
 #line 33
 layout(location=0) in vec3 pos;
-layout(location=1) in highp vec4 splat_pos_radius;
+layout(location=1) in mediump vec4 splat_pos_radius;
 layout(location=2) in mediump vec4 splat_normal;
 layout(location=3) in mediump vec4 splat_color_in;
 
