@@ -6,6 +6,8 @@
 #include <fstream>
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/string_cast.hpp>
 #include <lasreader.hpp>
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
@@ -133,6 +135,8 @@ int main(int argc, char **argv) {
 	ne.setViewPoint(0.0, 0.0, diagonal.z * 10.0);
 	ne.compute(*normals);
 
+	// TODO: Take a scale factor input to re-scale the surfels before writing.
+
 	std::vector<Surfel> surfels;
 	surfels.reserve(cloud->size());
 	for (size_t i = 0; i < cloud->size(); ++i) {
@@ -155,7 +159,12 @@ int main(int argc, char **argv) {
 		s.b = (rgb & 0x0000ff) / 255.0;
 
 		s.radius = avg_neighbor_dist * 2.5;
-		surfels.push_back(s);
+
+		if (std::isnormal(s.x) && !std::isnormal(s.y) && !std::isnormal(s.z)
+			&& !std::isnormal(s.nx) && !std::isnormal(s.ny) && !std::isnormal(s.nz))
+		{
+			surfels.push_back(s);
+		}
 	}
 	std::cout << "Writing surfel dataset with " << surfels.size() << " surfels\n";
 	write_raw_surfels_v2(argv[2], surfels);

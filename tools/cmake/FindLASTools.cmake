@@ -27,7 +27,7 @@ find_path(LASLIB_INCLUDE_DIR lasreader.hpp
   /opt
   )
 
-find_library(LASLIB_LIBRARY_TMP NAMES las LAS LASlib.lib
+find_library(LASLIB_LIBRARY_TMP NAMES las LAS LASlib.lib LASlib
   HINTS
   $ENV{LASTools_DIR}
   ${LASTools_DIR}

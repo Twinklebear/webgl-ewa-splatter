@@ -43,8 +43,7 @@ if (${PCL_FOUND} AND ${LASTOOLS_FOUND})
 	set_target_properties(pcl_converter PROPERTIES
 		CXX_STANDARD 14
 		CXX_STANDARD_REQUIRED ON)
-	target_include_directories(pcl_converter PUBLIC
-		$<BUILD_INTERFACE:${PCL_INCLUDE_DIRS}>
-		$<BUILD_INTERFACE:${LASTOOLS_INCLUDE_DIRS}>)
+	include_directories(${PCL_INCLUDE_DIRS} ${LASTOOLS_INCLUDE_DIRS})
+	message("PCL Includes: ${PCL_INCLUDE_DIRS}")
 endif()
 
