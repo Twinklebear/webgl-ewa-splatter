@@ -206,6 +206,9 @@ std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth
 	// used by all the trees, and store the surfels once. This will help a lot with
 	// reducing the duplication of surfels we have right now. Then we re-map the
 	// primitive indices of each subtree to reference inside this shared surfel list
+	// The bundled subtrees should also be grouped based on how many surfels are shared
+	// between them, so that we create files that minimize the amount of duplication
+	// we have to do of surfels between files.
 
 	std::stack<size_t> todo;
 	todo.push(0);
