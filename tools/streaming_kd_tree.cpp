@@ -1,5 +1,4 @@
 #include <iostream>
-#include <unordered_map>
 #include <stack>
 #include <algorithm>
 #include <numeric>
@@ -72,6 +71,7 @@ Surfel compute_lod_surfel(const std::vector<uint32_t> &contained_prims,
 	return lod;
 }
 
+
 KdSubTree::KdSubTree(const Box &bounds, uint32_t root_id,
 		std::vector<StreamingKdNode> subtree_nodes,
 		const std::vector<uint32_t> &prim_indices,
@@ -83,69 +83,20 @@ KdSubTree::KdSubTree(const Box &bounds, uint32_t root_id,
 	// We need to build a new primitive list and primitive indices array
 	// specific to this subtree.
 	for (auto &n : nodes) {
-		if (n.is_leaf()) {
-			// Copy over the leaf node primitive indices
+		if (!n.is_leaf()) {
+			// Copy over the LOD surfel for interior nodes
+			const size_t prim = surfels.size();
+			surfels.push_back(all_surfels[n.prim_indices_offset]);
+			n.prim_indices_offset = prim;
+		} else {
+			// Copy over the leaf node surfels
 			const size_t prim = primitive_indices.size();
 			for (size_t i = 0; i < n.get_num_prims(); ++i) {
 				const size_t s_idx = prim_indices[n.prim_indices_offset + i];
-				primitive_indices.push_back(s_idx);
+				primitive_indices.push_back(surfels.size());
+				surfels.push_back(all_surfels[s_idx]);
 			}
 			n.prim_indices_offset = prim;
-		}
-	}
-}
-
-/* We define sub-tree similarity as the avg. number of surfels shared
- * between the trees. If the subtrees share no surfels, the returned
- * similarity value will be 1, otherwise it will be higher, indicating
- * some amount of surfels are shared between the trees.
- */
-float subtree_similarity(const KdSubTree &a, const KdSubTree &b) {
-	std::unordered_map<uint32_t, size_t> shared_surfels;
-	for (const auto &i : a.primitive_indices) {
-		shared_surfels[i]++;
-	}
-	for (const auto &i : b.primitive_indices) {
-		shared_surfels[i]++;
-	}
-	float similarity = 0;
-	for (const auto &s : shared_surfels) {
-		similarity += s.second;
-	}
-	return similarity / shared_surfels.size();
-}
-
-SubTreeGroup::SubTreeGroup(std::vector<KdSubTree> insubtrees, const std::vector<Surfel> &all_surfels)
-	: subtrees(std::move(insubtrees))
-{
-	// TODO: Find which surfels we need from the allsurfels list for this set of
-	// subtrees and add them to our surfels listing. We then need to re-map
-	// the primitive indices arrays in each subtree to point to this new array
-	std::unordered_map<size_t, size_t> surfel_indices;
-	for (auto &tree : subtrees) {
-		for (auto &n : tree.nodes) {
-			if (!n.is_leaf()) {
-				// Interior nodes have unique generated LOD surfels, and will not
-				// share between each other or leaf nodes, so just copy it over
-				const size_t prim = surfels.size();
-				surfels.push_back(all_surfels[n.prim_indices_offset]);
-				n.prim_indices_offset = prim;
-			} else {
-				// Find if we've already copied some of the surfels used by
-				// this leaf node, and can just reference those.
-				for (size_t i = 0; i < n.get_num_prims(); ++i) {
-					size_t s_idx = tree.primitive_indices[n.prim_indices_offset + i];
-					auto fnd = surfel_indices.find(s_idx);
-					if (fnd != surfel_indices.end()) {
-						s_idx = fnd->second;
-					} else {
-						const size_t new_idx = surfels.size();
-						surfels.push_back(all_surfels[s_idx]);
-						s_idx = new_idx;
-					}
-					tree.primitive_indices[n.prim_indices_offset + i] = s_idx;
-				}
-			}
 		}
 	}
 }
@@ -154,7 +105,7 @@ StreamingSplatKdTree::StreamingSplatKdTree(const std::vector<Surfel> &insurfels)
 	: surfels(insurfels),
 	max_depth(8 + 1.3 * std::log2(insurfels.size())),
 	tree_depth(0),
-	min_prims(128)
+	min_prims(64)
 
 {
 	if (surfels.size() > std::pow(2, 30)) {
@@ -223,7 +174,6 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 		}
 	}
 
-	++num_inner;
 	StreamingKdNode inner(split_pos, surfels.size(), split_axis);
 	// TODO: I think this is ok, since we put the LOD surfels at the end after
 	// the real surfels, they won't show up accidentally as a "real" surfel
@@ -242,12 +192,11 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 	nodes[inner_idx].set_right_child(right_child);
 	return inner_idx;
 }
-std::vector<SubTreeGroup> StreamingSplatKdTree::build_subtrees(size_t subtree_depth) const {
+std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth) const {
 	std::cout << "Tree depth: " << tree_depth
 		<< ", max subtree depth: " << subtree_depth
 		<< "\n";
-	std::cout << "Number of inner nodes: " << num_inner << "\n";
-
+	std::vector<KdSubTree> subtrees;
 	// Here we want to do a breadth-first traversal down the tree, to try and group
 	// files by their level
 
@@ -260,17 +209,7 @@ std::vector<SubTreeGroup> StreamingSplatKdTree::build_subtrees(size_t subtree_de
 	// The bundled subtrees should also be grouped based on how many surfels are shared
 	// between them, so that we create files that minimize the amount of duplication
 	// we have to do of surfels between files.
-	//
-	// To measure similarity we can count how many times the same primitive index
-	// shows up, and then take the average of all prim indices repetition counts.
-	// The higher this average is, the more similar the subtrees are.
-	//
-	// TODO: Actually, we should just group subtrees which are neighbors of each other,
-	// or are within the same level. Wouldn't this kind of be the same effect
-	// as measuring surfel similarities between them? It may be more expensive to
-	// find the similarities though.
 
-	std::vector<KdSubTree> subtrees;
 	std::stack<size_t> todo;
 	todo.push(0);
 	while (!todo.empty()) {
@@ -314,24 +253,6 @@ std::vector<SubTreeGroup> StreamingSplatKdTree::build_subtrees(size_t subtree_de
 				subtree_node_list, primitive_indices, surfels);
 	}
 
-	std::vector<SubTreeGroup> tree_groups;
-	std::cout << "Computing similarities\n" << std::flush;
-
-	float max_sim = 0;
-	for (size_t i = 0; i < subtrees.size(); ++i) {
-		const auto &a = subtrees[i];
-		float avg_sim = 0;
-		for (size_t j = 0; j < subtrees.size(); ++j) {
-			const auto &b = subtrees[i];
-			float sim = subtree_similarity(a, b);
-			max_sim = std::max(max_sim, sim);
-			avg_sim += sim;
-		}
-		std::cout << "Avg sim for " << i << " = "
-			<< avg_sim / subtrees.size() << "\n" << std::flush;
-	}
-	std::cout << "Max similarity: " << max_sim << "\n" << std::flush;
-
-	return tree_groups;
+	return subtrees;
 }
 
