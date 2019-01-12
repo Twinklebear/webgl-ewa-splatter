@@ -105,8 +105,7 @@ StreamingSplatKdTree::StreamingSplatKdTree(const std::vector<Surfel> &insurfels)
 	: surfels(insurfels),
 	max_depth(8 + 1.3 * std::log2(insurfels.size())),
 	tree_depth(0),
-	min_prims(64)
-
+	min_prims(128)
 {
 	if (surfels.size() > std::pow(2, 30)) {
 		std::cout << "Too many surfels in one streaming kd tree!\n";
@@ -197,18 +196,12 @@ std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth
 		<< ", max subtree depth: " << subtree_depth
 		<< "\n";
 	std::vector<KdSubTree> subtrees;
-	// Here we want to do a breadth-first traversal down the tree, to try and group
-	// files by their level
 
-	// TODO: What we actually want to do in the end to save some disk space
-	// is to get together the list of kd trees, without making the surfel copies
-	// yet. Then, we bundle the subtrees into files, and collect the surfel subsets
-	// used by all the trees, and store the surfels once. This will help a lot with
-	// reducing the duplication of surfels we have right now. Then we re-map the
-	// primitive indices of each subtree to reference inside this shared surfel list
-	// The bundled subtrees should also be grouped based on how many surfels are shared
-	// between them, so that we create files that minimize the amount of duplication
-	// we have to do of surfels between files.
+	/* Actually, is it such a big deal if we don't group the files?
+	 * The shared surfels between each subtree are not that many,
+	 * so it's not like we'd cut down the file size much and would
+	 * increase the complexity of the file format by quite a bit.
+	 */
 
 	std::stack<size_t> todo;
 	todo.push(0);
