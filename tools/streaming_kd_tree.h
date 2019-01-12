@@ -48,8 +48,6 @@ struct KdSubTree {
 
 	std::vector<StreamingKdNode> nodes;
 	std::vector<uint32_t> primitive_indices;
-	// The LOD and original surfels for this subtree
-	std::vector<Surfel> surfels;
 
 	/* Build the kd sub-tree containing the passed subtree nodes,
 	 * assumes that subtree_nodes[0] is the tree root
@@ -58,6 +56,19 @@ struct KdSubTree {
 			std::vector<StreamingKdNode> subtree_nodes,
 			const std::vector<uint32_t> &prim_indices,
 			const std::vector<Surfel> &surfels);
+};
+
+struct SubTreeGroup {
+	// The shared list of surfels for this group of sub-trees
+	std::vector<Surfel> surfels;
+	std::vector<KdSubTree> subtrees;
+
+	/* Build the subtree group file from the set of subtrees passed.
+	 * The primitive indices will be re-mapped to the new surfels array
+	 * stored for this subtree group.
+	 */
+	SubTreeGroup(std::vector<KdSubTree> subtrees,
+			const std::vector<Surfel> &all_surfels);
 };
 
 /* A median-split kd tree, configured for a streaming LOD
@@ -79,6 +90,7 @@ struct StreamingSplatKdTree {
 
 	int max_depth, tree_depth;
 	int min_prims;
+	size_t num_inner = 0;
 
 	/* Build the streaming splat kd tree on the geometry, given
 	 * some size limit (in bytes) to constain each subtree file to
@@ -88,7 +100,7 @@ struct StreamingSplatKdTree {
 	/* Split the kd-tree up into sets of subtrees to constrain the
 	 * output files for each subtree to some desired tree depth.
 	 */
-	std::vector<KdSubTree> build_subtrees(size_t subtree_depth) const;
+	std::vector<SubTreeGroup> build_subtrees(const size_t subtree_depth) const;
 
 private:
 	/* Recursively build the tree, returns this node's index in the

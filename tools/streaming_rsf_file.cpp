@@ -12,6 +12,7 @@ struct StreamingSurfel {
 	uint16_t nx, ny, nz, pad;
 };
 
+/*
 void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
 	const std::string fname = dirname + std::to_string(tree.root_id) + ".srsf";
 	std::ofstream fout(fname.c_str(), std::ios::binary);
@@ -61,6 +62,7 @@ void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
 	fout.write(reinterpret_cast<const char*>(surfs.data()), sizeof(StreamingSurfel) * surfs.size());
 	fout.write(reinterpret_cast<const char*>(colors.data()), colors.size());
 }
+*/
 
 void write_streaming_surfels(const std::string &dirname, const std::vector<Surfel> &surfels) {
 	// For testing, limit the subtree size to be quite small (32k)
@@ -68,10 +70,11 @@ void write_streaming_surfels(const std::string &dirname, const std::vector<Surfe
 
 	StreamingSplatKdTree forest(surfels);
 	auto subtrees = forest.build_subtrees(forest.tree_depth / 3);
-	std::cout << "Number of subtrees to write: " << subtrees.size() << "\n";
+	std::cout << "Number of subtree groups to write: " << subtrees.size() << "\n";
 	for (const auto &st : subtrees) {
-		std::cout << "Writing subtree root id = " << st.root_id << "\n";
-		write_kdsubtree(dirname, st);
+		std::cout << "Group has " << st.surfels.size() << " surfels\n";
+		//std::cout << "Writing subtree root id = " << st.root_id << "\n";
+		//write_kdsubtree(dirname, st);
 	}
 }
 
