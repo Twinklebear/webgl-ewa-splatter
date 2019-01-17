@@ -14,6 +14,7 @@ struct Box {
 	void extend(const glm::vec3 &p);
 	void box_union(const Box &b);
 	bool overlaps(const Box &b);
+	bool contains_point(const glm::vec3 &p) const;
 	AXIS longest_axis() const;
 	glm::vec3 center() const;
 };

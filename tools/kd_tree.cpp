@@ -31,6 +31,18 @@ bool Box::overlaps(const Box &b) {
 	}
 	return true;
 }
+bool Box::contains_point(const glm::vec3 &p) const {
+	if (p.x < lower.x || p.x > upper.x) {
+		return false;
+	}
+	if (p.y < lower.y || p.y > upper.y) {
+		return false;
+	}
+	if (p.z < lower.z || p.z > upper.z) {
+		return false;
+	}
+	return true;
+}
 AXIS Box::longest_axis() const {
 	const glm::vec3 diag = upper - lower;
 	if (diag.x >= diag.y && diag.x >= diag.z) {
