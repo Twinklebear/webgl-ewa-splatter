@@ -131,11 +131,13 @@ var selectPointCloud = function() {
 			splatAttribVbo = [gl.createBuffer(), gl.createBuffer()]; 
 		}
 
-		var surfels = kdTree.queryLevel(0);
+		var query = kdTree.queryLevel(0);
 
 		gl.bindVertexArray(vao);
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
-		gl.bufferData(gl.ARRAY_BUFFER, surfels[0], gl.DYNAMIC_DRAW);
+		// Is the length in bytes or in elements?
+		gl.bufferData(gl.ARRAY_BUFFER, query.pos.buffer, gl.DYNAMIC_DRAW,
+			0, query.pos.len);
 
 		gl.enableVertexAttribArray(1);
 		gl.vertexAttribPointer(1, 4, gl.HALF_FLOAT, false, sizeofSurfel, 0);
@@ -146,13 +148,14 @@ var selectPointCloud = function() {
 		gl.vertexAttribDivisor(2, 1);
 
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
-		gl.bufferData(gl.ARRAY_BUFFER, surfels[1], gl.DYNAMIC_DRAW);
+		gl.bufferData(gl.ARRAY_BUFFER, query.color.buffer, gl.DYNAMIC_DRAW,
+			0, query.color.len);
 		gl.enableVertexAttribArray(3);
 		gl.vertexAttribPointer(3, 4, gl.UNSIGNED_BYTE, true, 0, 0);
 		gl.vertexAttribDivisor(3, 1);
 		
 		newPointCloudUpload = true;
-		var numSurfels = surfels[0].byteLength / sizeofSurfel;
+		var numSurfels = query.pos.len / (sizeofSurfel / 2);
 		numSplatsElem.innerHTML = numSurfels;
 
 		if (firstUpload) {
@@ -180,19 +183,28 @@ var selectPointCloud = function() {
 				if (levelSelectionSlider.value != currentLevel || wasLoadingData) {
 					treeLevel.innerHTML = levelSelectionSlider.value;
 					currentLevel = levelSelectionSlider.value;
-					var surfels = kdTree.queryLevel(currentLevel);
+
+					query.pos.clear();
+					query.color.clear();
+					query = kdTree.queryLevel(currentLevel, query);
+
 					wasLoadingData = activeLoadRequests > 0;
 					var endTraversal = new Date();
-					if (surfels[0] != null) {
+					if (query.len != 0) {
 						var startUpload = new Date();
 						gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
-						gl.bufferData(gl.ARRAY_BUFFER, surfels[0], gl.DYNAMIC_DRAW);
+						gl.bufferData(gl.ARRAY_BUFFER, query.pos.buffer, gl.DYNAMIC_DRAW,
+							0, query.pos.len);
+
 						gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
-						gl.bufferData(gl.ARRAY_BUFFER, surfels[1], gl.DYNAMIC_DRAW);
+						gl.bufferData(gl.ARRAY_BUFFER, query.color.buffer, gl.DYNAMIC_DRAW,
+							0, query.color.len);
+
 						var endUpload = new Date();
 
-						numSurfels = surfels[0].byteLength / sizeofSurfel;
+						numSurfels = query.pos.len / (sizeofSurfel / 2);
 						numSplatsElem.innerHTML = numSurfels;
+
 						traversalTimeElem.innerHTML = endTraversal - startTraversal;
 						uploadTimeElem.innerHTML = endUpload - startUpload;
 					}

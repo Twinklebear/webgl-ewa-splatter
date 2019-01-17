@@ -31,67 +31,58 @@ var KdTree = function(dataBuffer) {
 	// subtree? The latter might be simpler actually.
 	this.subtrees = {}
 	this.loading = {}
+
+	// Scratch space to use when querying, enough to hold one leaf in the tree
+	this.scratchPos = new Uint16Array(128 * (sizeofSurfel / 2));
+	this.scratchColor = new Uint8Array(128 * 4);
+
+	this.nodeStack = new Uint32Array(64);
+	this.nodeStackDepths = new Uint32Array(64);
 }
 
 // For testing: Load all surfels from a specific level of the tree, and return
 // the combined position and attribute buffers for rendering
-KdTree.prototype.queryLevel = function(level) {
-	// TODO: We incur a ton of memory allocation and de-allocation doing the
-	// traversal and configuration this way. There should be some way to
-	// re-use the splatpos buffers better, so that after loading the initial
-	// set for some viewpoint when we re-query or re-build for small view changes
-	// we don't need to re-allocate and re-build everything.
-	var splatPos = null;
-	var splatColors = null;
-
-	// TODO: It will probably be more efficient to merge the traversal
-	// of this tree and all asynchronously loaded subtrees into a single
-	// function call, so we can re-use the stack much more.
-
-	const maxNodeStack = 64;
-	// The node indices to traverse next
-	var nodeStack = new Uint32Array(maxNodeStack);
-	var nodeStackDepths = new Uint32Array(maxNodeStack);
+KdTree.prototype.queryLevel = function(level, query) {
+	if (!query) {
+		query = {
+			pos: new Buffer(128 * 2, "uint16"),
+			color: new Buffer(128 * 4, "uint8"),
+		};
+	}
 
 	var stackPos = 0;
 	var currentNode = 0;
 	var currentDepth = 0;
 	while (true) {
+		var loadedSurfels = 0;
 		if (currentDepth == level || nodeIsLeaf(this.nodes, currentNode)) {
 			// If we've reached the desired level or the bottom of the tree,
 			// append this nodes surfel(s) to the list to be returned
-			var pos = null;
-			var color = null;
 			var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
 			if (!nodeIsLeaf(this.nodes, currentNode)) {
-				pos = new Uint16Array(sizeofSurfel / 2);
-				color = new Uint8Array(4);
+				loadedSurfels = 1;
 				for (var i = 0; i < sizeofSurfel / 2; ++i) {
-					pos[i] = this.positions[primOffset * (sizeofSurfel / 2) + i]
+					this.scratchPos[i] = this.positions[primOffset * (sizeofSurfel / 2) + i]
 				}
 				for (var i = 0; i < 4; ++i) {
-					color[i] = this.colors[primOffset * 4 + i]
+					this.scratchColor[i] = this.colors[primOffset * 4 + i]
 				}
 			} else {
 				var numPrims = nodeNumPrims(this.nodes, currentNode);
-				pos = new Uint16Array((sizeofSurfel / 2) * numPrims);
-				color = new Uint8Array(4 * numPrims);
+				loadedSurfels = numPrims;
+				if (numPrims * sizeofSurfel > this.scratchPos.byteLength) {
+					this.scratchPos = new Uint16Array(numPrims * (sizeofSurfel / 2));
+					this.scratchColor = new Uint8Array(numPrims * 4);
+				}
 				for (var p = 0; p < numPrims; ++p) {
 					var prim = this.primIndices[primOffset + p];
 					for (var i = 0; i < sizeofSurfel / 2; ++i) {
-						pos[p * (sizeofSurfel / 2) + i] = this.positions[prim * (sizeofSurfel / 2) + i]
+						this.scratchPos[p * (sizeofSurfel / 2) + i] = this.positions[prim * (sizeofSurfel / 2) + i]
 					}
 					for (var i = 0; i < 4; ++i) {
-						color[p * 4 + i] = this.colors[prim * 4 + i]
+						this.scratchColor[p * 4 + i] = this.colors[prim * 4 + i]
 					}
 				}
-			}
-			if (splatPos == null) {
-				splatPos = pos;
-				splatColors = color;
-			} else {
-				splatPos = appendTypedArray(splatPos, pos);
-				splatColors = appendTypedArray(splatColors, color);
 			}
 		} else if (currentDepth < level) {
 			var children = [nodeLeftChild(this.nodes, currentNode),
@@ -101,8 +92,8 @@ KdTree.prototype.queryLevel = function(level) {
 
 			// If neither child is external push them onto the stack and traverse them
 			if (!external[0] && !external[1]) {
-				nodeStack[stackPos] = children[1];
-				nodeStackDepths[stackPos] = currentDepth + 1;
+				this.nodeStack[stackPos] = children[1];
+				this.nodeStackDepths[stackPos] = currentDepth + 1;
 				stackPos += 1;
 
 				currentNode = children[0];
@@ -115,19 +106,17 @@ KdTree.prototype.queryLevel = function(level) {
 					if (external[i]) {
 						// If we've loaded this subtree, traverse it, otherwise request it if
 						// we're not already trying to load it
-						var st = [null, null];
 						if (this.subtrees[children[i]]) {
-							st = this.subtrees[children[i]].queryLevel(level - currentDepth - 1);
+							query = this.subtrees[children[i]].queryLevel(level - currentDepth - 1, query);
 						} else {
 							// Show the parent LOD surfel as a placehold while we load
 							var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
-							st[0] = new Uint16Array(sizeofSurfel / 2);
-							st[1] = new Uint8Array(4);
+							loadedSurfels = 1;
 							for (var j = 0; j < sizeofSurfel / 2; ++j) {
-								st[0][j] = this.positions[primOffset * (sizeofSurfel / 2) + j]
+								this.scratchPos[j] = this.positions[primOffset * (sizeofSurfel / 2) + j]
 							}
 							for (var j = 0; j < 4; ++j) {
-								st[1][j] = this.colors[primOffset * 4 + j]
+								this.scratchColor[j] = this.colors[primOffset * 4 + j]
 							}
 
 							// Request to load the subtree if we're not already doing so, and
@@ -146,141 +135,32 @@ KdTree.prototype.queryLevel = function(level) {
 								});
 							}
 						}
-						if (st[0] != null) {
-							if (splatPos == null) {
-								splatPos = st[0];
-								splatColors = st[1];
-							} else {
-								splatPos = appendTypedArray(splatPos, st[0]);
-								splatColors = appendTypedArray(splatColors, st[1]);
-							}
-						}
 					} else {
-						// TODO: This won't happen b/c of how I build the trees
-						console.log("mixed external/internal node");
-						// If it's not external then we know it's the only non-external one
-						// and we can traverse it next
-						currentNode = children[i];
-						currentDepth += 1;
+						// This won't happen b/c of how I build the trees
+						console.log("ERROR: mixed external/internal node");
 					}
-				}
-				// We did have one local node that we should traverse which we
-				// set as our currentNode, so go traverse it.
-				if (!external[0] || !external[1]) {
-					continue;
 				}
 			}
 		}
+
+		// Take the surfels we took from the interior nodes or leaves and
+		// append them to our output buffer.
+		var pos = this.scratchPos.subarray(0, loadedSurfels * (sizeofSurfel / 2));
+		var color = this.scratchColor.subarray(0, loadedSurfels * 4);
+		query.pos.append(pos);
+		query.color.append(color);
+
 		// In the first two cases of the if we've hit the bottom of
 		// what we can traverse in this tree, and should pop the stack
 		if (stackPos > 0) {
 			stackPos -= 1;
-			currentNode = nodeStack[stackPos];
-			currentDepth = nodeStackDepths[stackPos];
+			currentNode = this.nodeStack[stackPos];
+			currentDepth = this.nodeStackDepths[stackPos];
 		} else {
 			break;
 		}
 	}
-	return [splatPos, splatColors];
-}
-
-KdTree.prototype.intersect = function(rayOrig, rayDir) {
-	var invDir = vec3.inverse(vec3.create(), rayDir);
-	var negDir = [rayDir[0] < 0 ? 1 : 0, rayDir[1] < 0 ? 1 : 0, rayDir[2] < 0 ? 1 : 0];
-
-	var tRange = intersectBox(this.bounds, rayOrig, invDir, negDir);
-	if (tRange == null) {
-		return null;
-	}
-
-	var tHit = Number.POSITIVE_INFINITY;
-	var hitPrim = -1;
-	var splatCenter = vec3.create();
-	var splatNormal = vec3.create();
-
-	const maxNodeStack = 64;
-	// The node indices to traverse next
-	var nodeStack = new Uint32Array(maxNodeStack);
-	// The t ranges of the nodes to be traversed
-	var nodeStackTvals = new Float32Array(maxNodeStack * 2);
-	var stackPos = 0;
-	var currentNode = 0;
-	while (true) {
-		// Break if we found a closer hit
-		if (tHit < tRange[0]) {
-			break;
-		}
-
-		if (!nodeIsLeaf(this.nodes, currentNode)) {
-			// Intersect with the interior node splitting plane
-			var splitAxis = nodeSplitAxis(this.nodes, currentNode);
-			var splitPos = nodeSplitPos(this.nodesFloatView, currentNode);
-			var tPlane = (splitPos - rayOrig[splitAxis]) * invDir[splitAxis];
-
-			// Find which child we should traverse first, the low side (left)
-			// or the upper side (right) 
-			var leftFirst = rayOrig[splitAxis] < splitPos
-				|| (rayOrig[splitAxis] == splitPos && rayDir[splitAxis] <= 0.0);
-
-			var firstChild, secondChild;
-			if (leftFirst) {
-				firstChild = currentNode + 1;
-				secondChild = nodeRightChild(this.nodes, currentNode);
-			} else {
-				firstChild = nodeRightChild(this.nodes, currentNode);
-				secondChild = currentNode + 1;
-			}
-
-			// See which nodes we actually need to traverse, based on the t range
-			// intersected by the ray
-			if (tPlane > tRange[1] || tPlane <= 0) {
-				currentNode = firstChild;
-			} else if (tPlane < tRange[0]) {
-				currentNode = secondChild;
-			} else {
-				// We need to do both, push the second child on and traverse the first
-				nodeStack[stackPos] = secondChild;
-				nodeStackTvals[2 * stackPos] = tPlane;
-				nodeStackTvals[2 * stackPos + 1] = tRange[1];
-				stackPos += 1;
-
-				currentNode = firstChild;
-				tRange[1] = tPlane;
-			}
-		} else {
-			// It's a leaf, intersect with its primitives
-			var offset = nodePrimIndicesOffset(this.nodes, currentNode);
-			for (var i = 0; i < nodeNumPrims(this.nodes, currentNode); ++i) {
-				var p = this.primIndices[i + offset];
-				var radius = this.surfels[8 * p + 3];
-				splatCenter = vec3.set(splatCenter, this.surfels[8 * p],
-					this.surfels[8 * p + 1], this.surfels[8 * p + 2]);
-				splatNormal = vec3.set(splatNormal, this.surfels[8 * p + 4],
-					this.surfels[8 * p + 5], this.surfels[8 * p + 6]);
-				var t = intersectDisk(rayOrig, rayDir, tHit, splatCenter, splatNormal, radius);
-				if (t >= 0.0) {
-					tHit = t;
-					hitPrim = p;
-				}
-			}
-			// Pop the next node off the stack
-			if (stackPos > 0) {
-				stackPos -= 1;
-				currentNode = nodeStack[stackPos];
-				tRange[0] = nodeStackTvals[2 * stackPos];
-				tRange[1] = nodeStackTvals[2 * stackPos + 1];
-			} else {
-				break;
-			}
-		}
-	}
-
-	if (tHit < Number.POSITIVE_INFINITY) {
-		var hitP = vec3.create();
-		var hitP = vec3.add(hitP, rayOrig, vec3.scale(hitP, rayDir, tHit));
-		return [hitP, hitPrim];
-	}
-	return null;
+	return query;
 }
 
 var intersectBox = function(box, rayOrig, invDir, negDir) {

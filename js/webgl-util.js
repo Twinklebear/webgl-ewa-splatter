@@ -96,6 +96,33 @@ var pointDist = function(a, b) {
 	return Math.sqrt(Math.pow(v[0], 2.0) + Math.pow(v[1], 2.0));
 }
 
+var Buffer = function(capacity, dtype) {
+	this.len = 0;
+	this.capacity = capacity;
+	if (dtype == "uint8") {
+		this.buffer = new Uint8Array(capacity);
+	} else if (dtype == "uint16") {
+		this.buffer = new Uint16Array(capacity);
+	}
+}
+
+Buffer.prototype.append = function(buf) {
+	if (this.len + buf.byteLength >= this.capacity) {
+		var newCap = Math.floor(this.capacity * 1.5);
+		var tmp = new (this.buffer.constructor)(newCap);
+		tmp.set(this.buffer);
+
+		this.capacity = newCap;
+		this.buffer = tmp;
+	}
+	this.buffer.set(buf, this.len);
+	this.len += buf.length;
+}
+
+Buffer.prototype.clear = function(buf) {
+	this.len = 0;
+}
+
 /* The controller can register callbacks for various events on a canvas:
  *
  * mousemove: function(prevMouse, curMouse, evt)
@@ -355,15 +382,5 @@ var hexToRGB = function(hex) {
 	var g = (val >> 8) & 255;
 	var b = val & 255;
 	return [r, g, b];
-}
-
-// Append the typed arrays, will append b to a and
-// return the new array. a and b must be the same type
-// See: https://stackoverflow.com/questions/33702838/how-to-append-bytes-multi-bytes-and-buffer-to-arraybuffer-in-javascript
-var appendTypedArray = function(a, b) {
-	var c = new (a.constructor)(a.length + b.length);
-	c.set(a, 0);
-	c.set(b, a.length);
-	return c;
 }
 
