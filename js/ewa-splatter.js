@@ -28,6 +28,8 @@ var brushShader = null;
 
 var kdTree = null;
 var currentLevel = 0;
+var activeLoadRequests = 0;
+var wasLoadingData = false;
 
 var splatRadiusSlider = null;
 var levelSelectionSlider = null;
@@ -81,16 +83,7 @@ var pointClouds = {
 };
 
 var loadKdTree = function(dataset, onload) {
-	var loadingProgressText = document.getElementById("loadingText");
-	var loadingProgressBar = document.getElementById("loadingProgressBar");
-	loadingProgressText.innerHTML = "Loading Dataset";
-	loadingProgressBar.setAttribute("style", "width: 0%");
-
-	var errFcn = function() {
-		loadingProgressText.innerHTML = "Error Loading Dataset";
-		loadingProgressBar.setAttribute("style", "width: 0%");
-	};
-
+	activeLoadRequests += 1;
 	if (!dataset.file) {
 		var url = "https://www.dl.dropboxusercontent.com/s/" + dataset.url + "?dl=1";
 		if (dataset.testing) {
@@ -100,14 +93,8 @@ var loadKdTree = function(dataset, onload) {
 
 		req.open("GET", url, true);
 		req.responseType = "arraybuffer";
-		req.onprogress = function(evt) {
-			var percent = evt.loaded / dataset.size * 100;
-			loadingProgressBar.setAttribute("style", "width: " + percent.toFixed(2) + "%");
-		};
-		req.onerror = errFcn;
 		req.onload = function(evt) {
-			loadingProgressText.innerHTML = "Loaded Dataset";
-			loadingProgressBar.setAttribute("style", "width: 100%");
+			activeLoadRequests -= 1;
 			var buffer = req.response;
 			if (buffer) {
 				onload(dataset, buffer);
@@ -119,10 +106,7 @@ var loadKdTree = function(dataset, onload) {
 		req.send();
 	} else {
 		var reader = new FileReader();
-		reader.onerror = errFcn;
 		reader.onload = function(evt) {
-			loadingProgressText.innerHTML = "Loaded Dataset";
-			loadingProgressBar.setAttribute("style", "width: 100%");
 			var buffer = reader.result;
 			if (buffer) {
 				onload(dataset, buffer);
@@ -138,11 +122,8 @@ var loadKdTree = function(dataset, onload) {
 var selectPointCloud = function() {
 	var selection = document.getElementById("datasets").value;
 	history.replaceState(history.state, "#" + selection, "#" + selection);
-	var loadingInfo = document.getElementById("loadingInfo");
-	loadingInfo.style.display = "block";
 
 	loadKdTree(pointClouds[selection], function(dataset, dataBuffer) {
-		loadingInfo.style.display = "none";
 		kdTree = new KdTree(dataBuffer);
 
 		var firstUpload = !splatAttribVbo;
@@ -196,10 +177,11 @@ var selectPointCloud = function() {
 				}
 
 				var startTraversal = new Date();
-				if (levelSelectionSlider.value != currentLevel) {
+				if (levelSelectionSlider.value != currentLevel || wasLoadingData) {
 					treeLevel.innerHTML = levelSelectionSlider.value;
 					currentLevel = levelSelectionSlider.value;
 					var surfels = kdTree.queryLevel(currentLevel);
+					wasLoadingData = activeLoadRequests > 0;
 					var endTraversal = new Date();
 					if (surfels[0] != null) {
 						var startUpload = new Date();
