@@ -115,29 +115,45 @@ KdTree.prototype.queryLevel = function(level) {
 					if (external[i]) {
 						// If we've loaded this subtree, traverse it, otherwise request it if
 						// we're not already trying to load it
+						var st = [null, null];
 						if (this.subtrees[children[i]]) {
-							var st = this.subtrees[children[i]].queryLevel(level - currentDepth - 1);
-							if (st[0] != null) {
-								if (splatPos == null) {
-									splatPos = st[0];
-									splatColors = st[1];
-								} else {
-									splatPos = appendTypedArray(splatPos, st[0]);
-									splatColors = appendTypedArray(splatColors, st[1]);
-								}
+							st = this.subtrees[children[i]].queryLevel(level - currentDepth - 1);
+						} else {
+							// Show the parent LOD surfel as a placehold while we load
+							var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
+							st[0] = new Uint16Array(sizeofSurfel / 2);
+							st[1] = new Uint8Array(4);
+							for (var j = 0; j < sizeofSurfel / 2; ++j) {
+								st[0][j] = this.positions[primOffset * (sizeofSurfel / 2) + j]
 							}
-						} else if (!this.loading[children[i]]) {
-							this.loading[children[i]] = 1;
-							var dataset = {
-								url: "tools/build/" + children[i] + ".srsf",
-								testing: true,
-								tree: children[i]
-							};
-							var self = this;
-							loadKdTree(dataset, function(ds, buffer) {
-								self.subtrees[ds.tree] = new KdTree(buffer);
-								self.loading[ds.tree] = null;
-							});
+							for (var j = 0; j < 4; ++j) {
+								st[1][j] = this.colors[primOffset * 4 + j]
+							}
+
+							// Request to load the subtree if we're not already doing so, and
+							// have not hit the request rate limit we're setting
+							if (!this.loading[children[i]] && activeLoadRequests < 8) {
+								this.loading[children[i]] = 1;
+								var dataset = {
+									url: "tools/build/" + children[i] + ".srsf",
+									testing: true,
+									tree: children[i]
+								};
+								var self = this;
+								loadKdTree(dataset, function(ds, buffer) {
+									self.subtrees[ds.tree] = new KdTree(buffer);
+									self.loading[ds.tree] = null;
+								});
+							}
+						}
+						if (st[0] != null) {
+							if (splatPos == null) {
+								splatPos = st[0];
+								splatColors = st[1];
+							} else {
+								splatPos = appendTypedArray(splatPos, st[0]);
+								splatColors = appendTypedArray(splatColors, st[1]);
+							}
 						}
 					} else {
 						// TODO: This won't happen b/c of how I build the trees
