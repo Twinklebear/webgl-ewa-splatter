@@ -18,15 +18,14 @@ int main(int argc, char **argv) {
 
 	std::vector<Surfel> surfels;
 	read_raw_surfels_v1(argv[1], surfels);
+	std::cout << "Loaded " << surfels.size() << " surfels\n";
 	auto end = std::remove_if(surfels.begin(), surfels.end(),
 		[](const Surfel &s) {
-			return !std::isnormal(s.x)
-				|| !std::isnormal(s.y)
-				|| !std::isnormal(s.z)
-				|| !std::isnormal(s.nx)
-				|| !std::isnormal(s.ny)
-				|| !std::isnormal(s.nz);
+			return std::isnan(s.nx)
+				|| std::isnan(s.ny)
+				|| std::isnan(s.nz);
 		});
+	std::cout << "Erasing " << std::distance(end, surfels.end()) << " surfels\n";
 	surfels.erase(end, surfels.end());
 	if (scale_factor > 0.0) {
 		for (auto &s : surfels) {
