@@ -63,7 +63,7 @@ void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
 }
 
 void write_streaming_surfels(const std::string &dirname, const std::vector<Surfel> &surfels) {
-	// For testing, limit the subtree size to be quite small (32k)
+	std::cout << "Input surfels: " << surfels.size() << "\n";
 	//const size_t subtree_size = 1024;// * 1024;
 
 	StreamingSplatKdTree forest(surfels);

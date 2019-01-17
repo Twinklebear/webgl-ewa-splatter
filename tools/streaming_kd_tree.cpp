@@ -151,20 +151,8 @@ uint32_t KdSubTree::rebuild_subtree(const uint32_t current_node,
 	if (fnd != subtree_nodes.end()) {
 		const uint32_t right_child = rebuild_subtree(n.right_child_index(),
 				subtree_nodes, all_nodes, prim_indices, all_surfels);
-		if (root_id == 0) {
-			std::cout << "Right child of " << current_node
-				<< "(" << inner_idx << ") was " << n.right_child_index()
-				<< " re-mapped to " << right_child << "\n";
-		}
 		nodes[inner_idx].set_right_child(right_child, false);
-		if (root_id == 0) {
-			std::cout << "stored as " << nodes[inner_idx].right_child_index() << "\n";
-		}
 	} else {
-		if (root_id == 0) {
-			std::cout << "Right child of " << current_node << " is external, id: "
-				<< n.right_child_index() << "\n";
-		}
 		nodes[inner_idx].set_right_child(n.right_child_index(), true);
 	}
 	return inner_idx;
@@ -199,6 +187,9 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 {
 	tree_depth = std::max(tree_depth, depth);
 
+	if (depth >= max_depth) {
+		std::cout << "Depth limit hit\n";
+	}
 	// We've hit max depth or the prim threshold, so make a leaf
 	if (depth >= max_depth || contained_prims.size() <= min_prims) {
 		StreamingKdNode node(contained_prims.size(), primitive_indices.size());
@@ -234,19 +225,19 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 	// Collect primitives for the left/right children
 	std::vector<uint32_t> left_prims, right_prims;
 	for (const auto &p : contained_prims) {
-		if (bounds[p].lower[split_axis] <= split_pos) {
+		// Since we're not going to ray trace against this data, it may
+		// be ok to uniquely assign surfels into bins. We can just assign
+		// it to the one its centroid is inside.
+		if (bounds[p].center()[split_axis] <= split_pos) {
 			left_prims.push_back(p);
-		}
-		if (bounds[p].upper[split_axis] >= split_pos) {
+		} else {
 			right_prims.push_back(p);
 		}
 	}
 
 	StreamingKdNode inner(split_pos, surfels.size(), split_axis);
-	// TODO: I think this is ok, since we put the LOD surfels at the end after
-	// the real surfels, they won't show up accidentally as a "real" surfel
 	Surfel lod_surfel = compute_lod_surfel(contained_prims, surfels);
-	lod_surfel.radius = glm::compMax(node_bounds.center() - node_bounds.lower) / 2.0;
+	lod_surfel.radius =  glm::compMax(node_bounds.center() - node_bounds.lower) / 2.0;
 	surfels.push_back(lod_surfel);
 
 	const uint32_t inner_idx = nodes.size();
@@ -298,18 +289,10 @@ std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth
 		}
 
 		// The next level have to go into other subtrees, they didn't fit here
-		std::cout << "Remaining for next level: {";
 		for (const auto &id : next_level) {
-			std::cout << id << ", ";
 			todo.push(id);
 		}
-		std::cout << "}\n";
 
-		std::cout << "Root id: " << subtree_nodes[0] << " has nodes: {";
-		for (const auto &i : subtree_nodes) {
-			std::cout << i << ", ";
-		}
-		std::cout << "}\n";
 		subtrees.emplace_back(subtree_bounds, subtree_nodes, nodes,
 				primitive_indices, surfels);
 	}
