@@ -96,7 +96,6 @@ var loadKdTree = function(dataset, onload) {
 		if (dataset.testing) {
 			url = dataset.url;
 		}
-		console.log("Loading url " + url);
 		var req = new XMLHttpRequest();
 
 		req.open("GET", url, true);

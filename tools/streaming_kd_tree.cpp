@@ -234,7 +234,11 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 
 	StreamingKdNode inner(split_pos, surfels.size(), split_axis);
 	Surfel lod_surfel = compute_lod_surfel(contained_prims, surfels);
-	lod_surfel.radius =  glm::compMax(node_bounds.center() - node_bounds.lower) / 2.0;
+	// TODO: We actually want to adjust what we pick as the LOD surfel radius based
+	// on the current tree depth. At high levels we want the max, but as we go deeper
+	// the min or avg. is better
+	const float lod_radius_scale = (depth >> 1) > 0 ? 1.5 * (depth >> 1) : 1.5;
+	lod_surfel.radius =  glm::compMax(node_bounds.center() - node_bounds.lower) / lod_radius_scale;
 	surfels.push_back(lod_surfel);
 
 	const uint32_t inner_idx = nodes.size();
@@ -254,6 +258,10 @@ std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth
 	std::cout << "Tree depth: " << tree_depth
 		<< ", max subtree depth: " << subtree_depth
 		<< "\n";
+	if (tree_depth % subtree_depth != 0) {
+		std::cout << "Rounding subtree depth up one\n";
+		subtree_depth += 1;
+	}
 	std::vector<KdSubTree> subtrees;
 
 	/* Actually, is it such a big deal if we don't group the files?
