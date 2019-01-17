@@ -237,8 +237,8 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 	// TODO: We actually want to adjust what we pick as the LOD surfel radius based
 	// on the current tree depth. At high levels we want the max, but as we go deeper
 	// the min or avg. is better
-	const float lod_radius_scale = (depth >> 1) > 0 ? 1.5 * (depth >> 1) : 1.5;
-	lod_surfel.radius =  glm::compMax(node_bounds.center() - node_bounds.lower) / lod_radius_scale;
+	//const float lod_radius_scale = (depth >> 1) > 0 ? 1.5 * (depth >> 1) : 1.5;
+	lod_surfel.radius =  glm::compMin(node_bounds.center() - node_bounds.lower) * 2.5;
 	surfels.push_back(lod_surfel);
 
 	const uint32_t inner_idx = nodes.size();
