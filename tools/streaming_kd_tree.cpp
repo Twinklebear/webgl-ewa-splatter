@@ -14,20 +14,39 @@
 StreamingKdNode::StreamingKdNode(float split_pos, uint32_t lod_prim, AXIS split_axis)
 	: split_pos(split_pos),
 	prim_indices_offset(lod_prim),
-	right_child(static_cast<uint32_t>(split_axis))
+	right_child(0),
+	num_prims(static_cast<uint32_t>(split_axis))
 {}
 StreamingKdNode::StreamingKdNode(uint32_t nprims, uint32_t prim_offset)
-	: prim_indices_offset(prim_offset),
+	: split_pos(0.f),
+	prim_indices_offset(prim_offset),
+	right_child(0),
 	num_prims(3 | (nprims << 2))
 {}
-void StreamingKdNode::set_right_child(uint32_t r) {
-	right_child |= (r << 2);
+void StreamingKdNode::set_left_child(uint32_t left_child, bool external) {
+	// Keep just the low bits tagging what our split axis is
+	num_prims = num_prims & 3;
+
+	num_prims |= (left_child << 3);
+	if (external) {
+		num_prims |= 4;
+	}
+}
+void StreamingKdNode::set_right_child(uint32_t r, bool external) {
+	right_child = 0;
+	right_child |= (r << 1);
+	if (external) {
+		right_child |= 1;
+	}
 }
 uint32_t StreamingKdNode::get_num_prims() const {
 	return num_prims >> 2;
 }
+uint32_t StreamingKdNode::left_child_index() const {
+	return num_prims >> 3;
+}
 uint32_t StreamingKdNode::right_child_index() const {
-	return right_child >> 2;
+	return right_child >> 1;
 }
 AXIS StreamingKdNode::split_axis() const {
 	return static_cast<AXIS>(num_prims & 3);
@@ -72,33 +91,83 @@ Surfel compute_lod_surfel(const std::vector<uint32_t> &contained_prims,
 }
 
 
-KdSubTree::KdSubTree(const Box &bounds, uint32_t root_id,
-		std::vector<StreamingKdNode> subtree_nodes,
+KdSubTree::KdSubTree(const Box &bounds,
+		std::vector<uint32_t> subtree_nodes,
+		const std::vector<StreamingKdNode> &all_nodes,
 		const std::vector<uint32_t> &prim_indices,
 		const std::vector<Surfel> &all_surfels)
 	: subtree_bounds(bounds),
-	root_id(root_id),
-	nodes(std::move(subtree_nodes))
+	root_id(subtree_nodes[0])
 {
-	// We need to build a new primitive list and primitive indices array
-	// specific to this subtree.
-	for (auto &n : nodes) {
-		if (!n.is_leaf()) {
-			// Copy over the LOD surfel for interior nodes
-			const size_t prim = surfels.size();
-			surfels.push_back(all_surfels[n.prim_indices_offset]);
-			n.prim_indices_offset = prim;
-		} else {
-			// Copy over the leaf node surfels
-			const size_t prim = primitive_indices.size();
-			for (size_t i = 0; i < n.get_num_prims(); ++i) {
-				const size_t s_idx = prim_indices[n.prim_indices_offset + i];
-				primitive_indices.push_back(surfels.size());
-				surfels.push_back(all_surfels[s_idx]);
-			}
-			n.prim_indices_offset = prim;
+	// TODO: We also need to re-map the node child indices to the new subtree,
+	// while leaving child indices that go beyond this subtree intact,
+	// since they reference other subtree's root nodes.
+	// To do this we need to traverse and essentially reconstruct this subtree
+	nodes.reserve(subtree_nodes.size());
+	rebuild_subtree(subtree_nodes[0], subtree_nodes, all_nodes,
+			prim_indices, all_surfels);
+}
+uint32_t KdSubTree::rebuild_subtree(const uint32_t current_node,
+		const std::vector<uint32_t> &subtree_nodes,
+		const std::vector<StreamingKdNode> &all_nodes,
+		const std::vector<uint32_t> &prim_indices,
+		const std::vector<Surfel> &all_surfels)
+{
+	StreamingKdNode n = all_nodes[current_node];
+	if (n.is_leaf()) {
+		// Copy over the leaf node surfels to rebuild the primitive indices
+		const size_t prim = primitive_indices.size();
+		for (size_t i = 0; i < n.get_num_prims(); ++i) {
+			const size_t s_idx = prim_indices[n.prim_indices_offset + i];
+			primitive_indices.push_back(surfels.size());
+			surfels.push_back(all_surfels[s_idx]);
 		}
+		n.prim_indices_offset = prim;
+
+		const uint32_t node_index = nodes.size();
+		nodes.push_back(n);
+		return node_index;
 	}
+
+	const size_t prim = surfels.size();
+	surfels.push_back(all_surfels[n.prim_indices_offset]);
+	n.prim_indices_offset = prim;
+
+	const uint32_t inner_idx = nodes.size();
+	nodes.push_back(n);
+
+	// Is the left child part of this subtree?
+	auto fnd = std::find(subtree_nodes.begin(), subtree_nodes.end(), n.left_child_index());
+	if (fnd != subtree_nodes.end()) {
+		rebuild_subtree(n.left_child_index(), subtree_nodes,
+				all_nodes, prim_indices, all_surfels);
+		nodes[inner_idx].set_left_child(inner_idx + 1, false);
+	} else {
+		nodes[inner_idx].set_left_child(n.left_child_index(), true);
+	}
+
+	// Is the right child part of this subtree?
+	fnd = std::find(subtree_nodes.begin(), subtree_nodes.end(), n.right_child_index());
+	if (fnd != subtree_nodes.end()) {
+		const uint32_t right_child = rebuild_subtree(n.right_child_index(),
+				subtree_nodes, all_nodes, prim_indices, all_surfels);
+		if (root_id == 0) {
+			std::cout << "Right child of " << current_node
+				<< "(" << inner_idx << ") was " << n.right_child_index()
+				<< " re-mapped to " << right_child << "\n";
+		}
+		nodes[inner_idx].set_right_child(right_child, false);
+		if (root_id == 0) {
+			std::cout << "stored as " << nodes[inner_idx].right_child_index() << "\n";
+		}
+	} else {
+		if (root_id == 0) {
+			std::cout << "Right child of " << current_node << " is external, id: "
+				<< n.right_child_index() << "\n";
+		}
+		nodes[inner_idx].set_right_child(n.right_child_index(), true);
+	}
+	return inner_idx;
 }
 
 StreamingSplatKdTree::StreamingSplatKdTree(const std::vector<Surfel> &insurfels)
@@ -186,9 +255,11 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 
 	// Build left child, will be placed after this inner node
 	build_tree(left_box, left_prims, depth + 1);
+	nodes[inner_idx].set_left_child(inner_idx + 1, false);
+
 	// Build right child
 	const uint32_t right_child = build_tree(right_box, right_prims, depth + 1);
-	nodes[inner_idx].set_right_child(right_child);
+	nodes[inner_idx].set_right_child(right_child, false);
 	return inner_idx;
 }
 std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth) const {
@@ -203,10 +274,10 @@ std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth
 	 * increase the complexity of the file format by quite a bit.
 	 */
 
-	std::stack<size_t> todo;
+	std::stack<uint32_t> todo;
 	todo.push(0);
 	while (!todo.empty()) {
-		std::vector<size_t> subtree_nodes, current_level, next_level;
+		std::vector<uint32_t> subtree_nodes, current_level, next_level;
 		next_level.push_back(todo.top());
 		const Box subtree_bounds = all_node_bounds[todo.top()];
 		todo.pop();
@@ -234,16 +305,13 @@ std::vector<KdSubTree> StreamingSplatKdTree::build_subtrees(size_t subtree_depth
 		}
 		std::cout << "}\n";
 
-		std::vector<StreamingKdNode> subtree_node_list;
-		subtree_node_list.reserve(subtree_nodes.size());
-		std::cout << "Nodes in subtree: {";
+		std::cout << "Root id: " << subtree_nodes[0] << " has nodes: {";
 		for (const auto &i : subtree_nodes) {
 			std::cout << i << ", ";
-			subtree_node_list.push_back(nodes[i]);
 		}
 		std::cout << "}\n";
-		subtrees.emplace_back(subtree_bounds, subtree_nodes[0],
-				subtree_node_list, primitive_indices, surfels);
+		subtrees.emplace_back(subtree_bounds, subtree_nodes, nodes,
+				primitive_indices, surfels);
 	}
 
 	return subtrees;

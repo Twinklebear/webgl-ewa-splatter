@@ -17,7 +17,6 @@ var projView = null;
 
 var vao = null;
 var splatAttribVbo = null;
-var colorsChanged = false;
 
 var tabFocused = true;
 var newPointCloudUpload = true;
@@ -27,20 +26,14 @@ var splatAccumFbo = null
 var normalizationPassShader = null;
 var brushShader = null;
 
-const sizeofSurfel = 16;
-const sizeofKdNode = 8;
-var numSurfels = null;
-var surfelBuffer = null;
-var surfelDataset = null;
-var surfelPositions = null;
-var surfelColors = null;
-
 var kdTree = null;
 
 var splatRadiusSlider = null;
-var brushRadiusSlider = null;
-var brushColorPicker = null;
 var mousePos = null;
+var numSplatsElem = null
+var traversalTimeElem = null
+var uploadTimeElem = null
+var renderTimeElem = null
 
 // For the render time targetting we could do progressive
 // rendering of the splats, or render at a lower resolution
@@ -85,7 +78,7 @@ var pointClouds = {
 	}
 };
 
-var loadPointCloud = function(dataset, onload) {
+var loadKdTree = function(dataset, onload) {
 	var loadingProgressText = document.getElementById("loadingText");
 	var loadingProgressBar = document.getElementById("loadingProgressBar");
 	loadingProgressText.innerHTML = "Loading Dataset";
@@ -101,6 +94,7 @@ var loadPointCloud = function(dataset, onload) {
 		if (dataset.testing) {
 			url = dataset.url;
 		}
+		console.log("Loading url " + url);
 		var req = new XMLHttpRequest();
 
 		req.open("GET", url, true);
@@ -146,32 +140,20 @@ var selectPointCloud = function() {
 	var loadingInfo = document.getElementById("loadingInfo");
 	loadingInfo.style.display = "block";
 
-	loadPointCloud(pointClouds[selection], function(dataset, dataBuffer) {
+	loadKdTree(pointClouds[selection], function(dataset, dataBuffer) {
 		loadingInfo.style.display = "none";
-		var header = new Uint32Array(dataBuffer, 0, 5);
-		var bounds = new Float32Array(dataBuffer, 20, 6);
-
-		console.log(header);
-		console.log(bounds);
-		numSurfels = header[0];
-		surfelPositions = new Uint16Array(dataBuffer, header[1], numSurfels * (sizeofSurfel / 2));
-		surfelColors = new Uint8Array(dataBuffer, header[1] + numSurfels * sizeofSurfel);
-
-		/*
-		var numKdNodes = header[2];
-		var kdNodes = new Uint32Array(dataBuffer, 44, numKdNodes * 2);
-		var kdPrimIndices = new Uint32Array(dataBuffer, 44 + numKdNodes * sizeofKdNode, header[3]);
-		kdTree = new KdTree(numKdNodes, kdNodes, kdPrimIndices, bounds, surfelPositions);
-		*/
+		kdTree = new KdTree(dataBuffer);
 
 		var firstUpload = !splatAttribVbo;
 		if (firstUpload) {
 			splatAttribVbo = [gl.createBuffer(), gl.createBuffer()]; 
 		}
 
+		var surfels = kdTree.queryLevel(8);
+
 		gl.bindVertexArray(vao);
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
-		gl.bufferData(gl.ARRAY_BUFFER, surfelPositions, gl.STATIC_DRAW);
+		gl.bufferData(gl.ARRAY_BUFFER, surfels[0], gl.DYNAMIC_DRAW);
 
 		gl.enableVertexAttribArray(1);
 		gl.vertexAttribPointer(1, 4, gl.HALF_FLOAT, false, sizeofSurfel, 0);
@@ -182,15 +164,14 @@ var selectPointCloud = function() {
 		gl.vertexAttribDivisor(2, 1);
 
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
-		gl.bufferData(gl.ARRAY_BUFFER, surfelColors, gl.DYNAMIC_DRAW);
+		gl.bufferData(gl.ARRAY_BUFFER, surfels[1], gl.DYNAMIC_DRAW);
 		gl.enableVertexAttribArray(3);
 		gl.vertexAttribPointer(3, 4, gl.UNSIGNED_BYTE, true, 0, 0);
 		gl.vertexAttribDivisor(3, 1);
 		
 		newPointCloudUpload = true;
-		document.getElementById("numSplats").innerHTML = numSurfels;
-		surfelBuffer = dataBuffer;
-		surfelDataset = dataset;
+		var numSurfels = surfels[0].byteLength / sizeofSurfel;
+		numSplatsElem.innerHTML = numSurfels;
 
 		if (firstUpload) {
 			setInterval(function() {
@@ -211,16 +192,26 @@ var selectPointCloud = function() {
 				if (newPointCloudUpload) {
 					camera = new ArcballCamera(center, 100, [WIDTH, HEIGHT]);
 					camera.zoom(-30);
-					// Pan the man down some
-					if (surfelDataset.url == pointClouds["Man"].url) {
-						camera.pan([0, -HEIGHT/2]);
-					}
 				}
-				if (colorsChanged) {
-					colorsChanged = false;
+
+				var startTraversal = new Date();
+				var surfels = kdTree.queryLevel(11);
+				var endTraversal = new Date();
+
+				if (surfels[0] != null) {
+					var startUpload = new Date();
+					gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
+					gl.bufferData(gl.ARRAY_BUFFER, surfels[0], gl.DYNAMIC_DRAW);
 					gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
-					gl.bufferSubData(gl.ARRAY_BUFFER, 0, surfelColors);
+					gl.bufferData(gl.ARRAY_BUFFER, surfels[1], gl.DYNAMIC_DRAW);
+					var endUpload = new Date();
+
+					var numSurfels = surfels[0].byteLength / sizeofSurfel;
+					numSplatsElem.innerHTML = numSurfels;
+					traversalTimeElem.innerHTML = endTraversal - startTraversal;
+					uploadTimeElem.innerHTML = endUpload - startUpload;
 				}
+
 				projView = mat4.mul(projView, proj, camera.camera);
 
 				splatShader.use();
@@ -255,6 +246,7 @@ var selectPointCloud = function() {
 				gl.finish();
 				var endTime = new Date();
 				var renderTime = endTime - startTime;
+				renderTimeElem.innerHTML = renderTime;
 				// TODO: If we have a nicer LOD ordering of the point cloud,
 				// we can adjust to keep the frame-rate constant by rendering
 				// a subset of the points. Or I could implement some acceleration
@@ -268,58 +260,16 @@ var selectPointCloud = function() {
 	});
 }
 
-var hexToRGB = function(hex) {
-	var val = parseInt(hex.substr(1), 16);
-	var r = (val >> 16) & 255;
-	var g = (val >> 8) & 255;
-	var b = val & 255;
-	return [r, g, b];
-}
-
-var fillColor = function() {
-	var brushColor = hexToRGB(brushColorPicker.value);
-	for (var i = 0; i < numSurfels; ++i) {
-		surfelColors[4 * i] = brushColor[0];
-		surfelColors[4 * i + 1] = brushColor[1];
-		surfelColors[4 * i + 2] = brushColor[2];
-	}
-	colorsChanged = true;
-}
-
-var saveModel = function() {
-	var blob = new Blob([surfelBuffer], {type: "application/byte-stream"});
-	var name = surfelDataset.url;
-	var fnd = surfelDataset.url.indexOf("/");
-	if (fnd != -1) {
-		name = surfelDataset.url.substr(fnd + 1);
-	}
-	saveAs(blob, name);
-}
-
-var uploadModel = function(files) {
-	var file = files[0];
-	pointClouds["uploaded_" + file.name] = {
-		file: file,
-		url: file.name,
-		size: file.size,
-	}
-	var selector = document.getElementById("datasets");
-	var opt = document.createElement("option");
-	opt.value = "uploaded_" + file.name;
-	opt.innerHTML = "Uploaded: " + file.name;
-	selector.appendChild(opt);
-	selector.value = opt.value;
-	selectPointCloud();
-}
-
 window.onload = function() {
 	fillDatasetSelector();
 
-	brushRadiusSlider = document.getElementById("brushRadiusSlider");
-	brushColorPicker = document.getElementById("brushColorPicker");
-
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
 	splatRadiusSlider.value = 2.5;
+
+	numSplatsElem = document.getElementById("numSplats");
+	traversalTimeElem = document.getElementById("traversalTime");
+	uploadTimeElem = document.getElementById("uploadTime");
+	renderTimeElem = document.getElementById("renderTime");
 
 	canvas = document.getElementById("glcanvas");
 	gl = canvas.getContext("webgl2");

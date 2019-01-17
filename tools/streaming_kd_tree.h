@@ -7,24 +7,27 @@
 #include "kd_tree.h"
 #include "rsf_file.h"
 
+// TODO: These nodes are getting pretty large now with adding all
+// this info.
 #pragma pack(1)
 struct StreamingKdNode {
 	// Interior node, splitting position along the axis
 	float split_pos;
+
 	// Leaf and Interior node, offset in 'primitive_indices' to its contained prims,
 	// or for interior nodes the surfel LOD representative location in the 'surfels' array
 	uint32_t prim_indices_offset;
 
-	// Used by inner and leaf, lower 2 bits used by both inner and leaf
-	// nodes, for inner nodes the lower bits track the split axis,
-	// for leaf nodes they indicate it's a leaf
-	union {
-		// Interior node, offset to its right child (with elements above
-		// the splitting plane)
-		uint32_t right_child;
-		// Leaf node, number of primitives in the leaf
-		uint32_t num_prims;
-	};
+	// Interior node: low bit indicates whether this child
+	// is in the subtree or not (1 if not inside)
+	uint32_t right_child;
+
+	// Both: low 2 bits indicate whether this is a leaf or interior node,
+	// for interior nodes these indicate which splitting plane was used (x/y/z)
+	// Leaf node: number of primitives in the leaf
+	// Interior node: left child id, the low third bit indicates if this child
+	// is not in the subtree (1 if not inside)
+	uint32_t num_prims;
 
 	// Interior node
 	StreamingKdNode(float split_pos, uint32_t lod_prim,
@@ -32,9 +35,14 @@ struct StreamingKdNode {
 	// Leaf node
 	StreamingKdNode(uint32_t nprims, uint32_t prim_offset);
 
-	void set_right_child(uint32_t right_child);
-	uint32_t get_num_prims() const;
+	void set_left_child(uint32_t left_child, bool external);
+	void set_right_child(uint32_t right_child, bool external);
+
 	uint32_t right_child_index() const;
+	uint32_t left_child_index() const;
+
+	uint32_t get_num_prims() const;
+	uint32_t get_prim_indices_offset() const;
 	AXIS split_axis() const;
 	bool is_leaf() const;
 };
@@ -54,10 +62,18 @@ struct KdSubTree {
 	/* Build the kd sub-tree containing the passed subtree nodes,
 	 * assumes that subtree_nodes[0] is the tree root
 	 */
-	KdSubTree(const Box &bounds, uint32_t root_id,
-			std::vector<StreamingKdNode> subtree_nodes,
+	KdSubTree(const Box &bounds,
+			std::vector<uint32_t> subtree_nodes,
+			const std::vector<StreamingKdNode> &all_nodes,
 			const std::vector<uint32_t> &prim_indices,
 			const std::vector<Surfel> &surfels);
+
+private:
+	uint32_t rebuild_subtree(const uint32_t current_node,
+			const std::vector<uint32_t> &subtree_nodes,
+			const std::vector<StreamingKdNode> &all_nodes,
+			const std::vector<uint32_t> &prim_indices,
+			const std::vector<Surfel> &all_surfels);
 };
 
 /* A median-split kd tree, configured for a streaming LOD
