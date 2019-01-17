@@ -198,6 +198,7 @@ var selectPointCloud = function() {
 
 				var startTraversal = new Date();
 				if (levelSelectionSlider.value != currentLevel) {
+					treeLevel.innerHTML = levelSelectionSlider.value;
 					currentLevel = levelSelectionSlider.value;
 					var surfels = kdTree.queryLevel(currentLevel);
 					var endTraversal = new Date();
@@ -272,6 +273,8 @@ window.onload = function() {
 
 	levelSelectionSlider = document.getElementById("levelSelectionSlider");
 	levelSelectionSlider.value = 0;
+	treeLevel = document.getElementById("treeLevel");
+	treeLevel.innerHTML = levelSelectionSlider.value;
 
 	numSplatsElem = document.getElementById("numSplats");
 	traversalTimeElem = document.getElementById("traversalTime");
