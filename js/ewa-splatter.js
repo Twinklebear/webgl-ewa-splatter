@@ -27,8 +27,10 @@ var normalizationPassShader = null;
 var brushShader = null;
 
 var kdTree = null;
+var currentLevel = 0;
 
 var splatRadiusSlider = null;
+var levelSelectionSlider = null;
 var mousePos = null;
 var numSplatsElem = null
 var traversalTimeElem = null
@@ -149,7 +151,7 @@ var selectPointCloud = function() {
 			splatAttribVbo = [gl.createBuffer(), gl.createBuffer()]; 
 		}
 
-		var surfels = kdTree.queryLevel(8);
+		var surfels = kdTree.queryLevel(0);
 
 		gl.bindVertexArray(vao);
 		gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
@@ -195,21 +197,23 @@ var selectPointCloud = function() {
 				}
 
 				var startTraversal = new Date();
-				var surfels = kdTree.queryLevel(11);
-				var endTraversal = new Date();
+				if (levelSelectionSlider.value != currentLevel) {
+					currentLevel = levelSelectionSlider.value;
+					var surfels = kdTree.queryLevel(currentLevel);
+					var endTraversal = new Date();
+					if (surfels[0] != null) {
+						var startUpload = new Date();
+						gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
+						gl.bufferData(gl.ARRAY_BUFFER, surfels[0], gl.DYNAMIC_DRAW);
+						gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
+						gl.bufferData(gl.ARRAY_BUFFER, surfels[1], gl.DYNAMIC_DRAW);
+						var endUpload = new Date();
 
-				if (surfels[0] != null) {
-					var startUpload = new Date();
-					gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
-					gl.bufferData(gl.ARRAY_BUFFER, surfels[0], gl.DYNAMIC_DRAW);
-					gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
-					gl.bufferData(gl.ARRAY_BUFFER, surfels[1], gl.DYNAMIC_DRAW);
-					var endUpload = new Date();
-
-					var numSurfels = surfels[0].byteLength / sizeofSurfel;
-					numSplatsElem.innerHTML = numSurfels;
-					traversalTimeElem.innerHTML = endTraversal - startTraversal;
-					uploadTimeElem.innerHTML = endUpload - startUpload;
+						numSurfels = surfels[0].byteLength / sizeofSurfel;
+						numSplatsElem.innerHTML = numSurfels;
+						traversalTimeElem.innerHTML = endTraversal - startTraversal;
+						uploadTimeElem.innerHTML = endUpload - startUpload;
+					}
 				}
 
 				projView = mat4.mul(projView, proj, camera.camera);
@@ -264,7 +268,10 @@ window.onload = function() {
 	fillDatasetSelector();
 
 	splatRadiusSlider = document.getElementById("splatRadiusSlider");
-	splatRadiusSlider.value = 2.5;
+	splatRadiusSlider.value = 2.0;
+
+	levelSelectionSlider = document.getElementById("levelSelectionSlider");
+	levelSelectionSlider.value = 0;
 
 	numSplatsElem = document.getElementById("numSplats");
 	traversalTimeElem = document.getElementById("traversalTime");
