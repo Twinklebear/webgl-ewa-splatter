@@ -19,7 +19,6 @@ void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
 	std::vector<uint8_t> colors;
 
 	// TODO: Quantize surfel positions to the parent box bounds
-	std::cout << "Subtree has: " << tree.surfels.size() << " surfels\n" << std::flush;
 	surfs.reserve(tree.surfels.size());
 	colors.reserve(tree.surfels.size());
 	for (const auto &s : tree.surfels) {
@@ -70,7 +69,6 @@ void write_streaming_surfels(const std::string &dirname, const std::vector<Surfe
 	auto subtrees = forest.build_subtrees(forest.tree_depth / 3);
 	std::cout << "Number of subtrees to write: " << subtrees.size() << "\n";
 	for (const auto &st : subtrees) {
-		std::cout << "Writing subtree root id = " << st.root_id << "\n";
 		write_kdsubtree(dirname, st);
 	}
 }

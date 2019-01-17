@@ -15,6 +15,7 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/kdtree/kdtree.h>
 #include "rsf_file.h"
+#include "streaming_rsf_file.h"
 
 enum LIDAR_CLASSIFICATION {
 	CREATED = 0,
@@ -34,7 +35,7 @@ LIDAR_CLASSIFICATION classify_point(uint8_t class_attrib);
 
 int main(int argc, char **argv) {
 	if (argc == 1) {
-		std::cout << "Usage: " << argv[0] << " <input.las/laz> <output.rsf>\n";
+		std::cout << "Usage: " << argv[0] << " <input.las/laz> <output.rsf> (scale factor)\n";
 		return 0;
 	}
 
@@ -44,6 +45,11 @@ int main(int argc, char **argv) {
 	if (!reader){
 		std::cout << "Failed to open: " << argv[1] << "\n";
 		return 1;
+	}
+
+	float scale_factor = 1.0f;
+	if (argc == 4) {
+		scale_factor = std::atof(argv[3]);
 	}
 
 	const bool has_color = reader->header.point_data_format == 2
@@ -142,9 +148,10 @@ int main(int argc, char **argv) {
 	for (size_t i = 0; i < cloud->size(); ++i) {
 		Surfel s;
 		const pcl::PointXYZRGB &pclpt = (*cloud)[i];
-		s.x = pclpt.x;
-		s.y = pclpt.y;
-		s.z = pclpt.z;
+		s.x = pclpt.x * scale_factor;
+		s.y = pclpt.y * scale_factor;
+		s.z = pclpt.z * scale_factor;
+		s.radius = avg_neighbor_dist * 2.5 * scale_factor;
 
 		s.nx = (*normals)[i].normal_x;
 		s.ny = (*normals)[i].normal_y;
@@ -158,16 +165,11 @@ int main(int argc, char **argv) {
 		s.g = ((rgb >> 8)  & 0x0000ff) / 255.0;
 		s.b = (rgb & 0x0000ff) / 255.0;
 
-		s.radius = avg_neighbor_dist * 2.5;
-
-		if (std::isnormal(s.x) && !std::isnormal(s.y) && !std::isnormal(s.z)
-			&& !std::isnormal(s.nx) && !std::isnormal(s.ny) && !std::isnormal(s.nz))
-		{
-			surfels.push_back(s);
-		}
+		surfels.push_back(s);
 	}
 	std::cout << "Writing surfel dataset with " << surfels.size() << " surfels\n";
-	write_raw_surfels_v2(argv[2], surfels);
+	//write_raw_surfels_v2(argv[2], surfels);
+	write_streaming_surfels(argv[2], surfels);
 
 	return 0;
 }

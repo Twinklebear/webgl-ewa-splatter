@@ -162,7 +162,7 @@ StreamingSplatKdTree::StreamingSplatKdTree(const std::vector<Surfel> &insurfels)
 	: surfels(insurfels),
 	max_depth(8 + 1.3 * std::log2(insurfels.size())),
 	tree_depth(0),
-	min_prims(128)
+	min_prims(64)
 {
 	if (surfels.size() > std::pow(2, 30)) {
 		std::cout << "Too many surfels in one streaming kd tree!\n";
@@ -187,9 +187,6 @@ uint32_t StreamingSplatKdTree::build_tree(const Box &node_bounds,
 {
 	tree_depth = std::max(tree_depth, depth);
 
-	if (depth >= max_depth) {
-		std::cout << "Depth limit hit\n";
-	}
 	// We've hit max depth or the prim threshold, so make a leaf
 	if (depth >= max_depth || contained_prims.size() <= min_prims) {
 		StreamingKdNode node(contained_prims.size(), primitive_indices.size());
