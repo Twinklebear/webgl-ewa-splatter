@@ -31,7 +31,7 @@ struct StreamingSurfel {
 };
 
 void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
-	const std::string fname = dirname + std::to_string(tree.root_id) + ".srsf";
+	const std::string fname = dirname + "/" + std::to_string(tree.root_id) + ".srsf";
 	std::ofstream fout(fname.c_str(), std::ios::binary);
 	std::vector<StreamingSurfel> surfs;
 	std::vector<uint8_t> colors;
