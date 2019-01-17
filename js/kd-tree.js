@@ -77,12 +77,12 @@ KdTree.prototype.queryLevel = function(level) {
 				pos = new Uint16Array((sizeofSurfel / 2) * numPrims);
 				color = new Uint8Array(4 * numPrims);
 				for (var p = 0; p < numPrims; ++p) {
-					var prim = this.primIndices[p];
+					var prim = this.primIndices[primOffset + p];
 					for (var i = 0; i < sizeofSurfel / 2; ++i) {
-						pos[i] = this.positions[prim * (sizeofSurfel / 2) + i]
+						pos[p * (sizeofSurfel / 2) + i] = this.positions[prim * (sizeofSurfel / 2) + i]
 					}
 					for (var i = 0; i < 4; ++i) {
-						color[i] = this.colors[prim * 4 + i]
+						color[p * 4 + i] = this.colors[prim * 4 + i]
 					}
 				}
 			}
