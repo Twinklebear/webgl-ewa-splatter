@@ -1,10 +1,28 @@
 #include <fstream>
 #include <iostream>
 #include <array>
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <stdio.h>
+#else
+#include <direct.h>
+#endif
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 #include <glm/packing.hpp>
 #include "streaming_kd_tree.h"
+
+void make_dir(const std::string &dir) {
+	// The dir may already exist which would cause us to fail,
+	// but that's a case we don't really consider a "failure",
+	// since the user already made the directory.
+#ifndef _WIN32
+	mkdir(dir.c_str(), S_IRWXU | S_IRWXG);
+#else
+	_mkdir(dir.c_str());
+#endif
+}
 
 #pragma pack(1)
 struct StreamingSurfel {
@@ -62,6 +80,7 @@ void write_kdsubtree(const std::string &dirname, const KdSubTree &tree) {
 }
 
 void write_streaming_surfels(const std::string &dirname, const std::vector<Surfel> &surfels) {
+	make_dir(dirname);
 	std::cout << "Input surfels: " << surfels.size() << "\n";
 	//const size_t subtree_size = 1024;// * 1024;
 
