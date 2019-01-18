@@ -1,3 +1,5 @@
+'use strict';
+
 // Vertices for the quad we intance to make the splats
 var splatVerts = [
 	-0.5, -0.5, 0,
@@ -259,8 +261,8 @@ var selectPointCloud = function() {
 
 					var hit = kdTree.intersect(orig, dir);
 					if (hit != null) {
-						hitP = hit[0];
-						hitPrim = hit[1];
+						var hitP = hit[0];
+						var hitPrim = hit[1];
 						var brushColor = hexToRGB(brushColorPicker.value);
 						gl.disable(gl.DEPTH_TEST);
 
@@ -407,8 +409,7 @@ window.onload = function() {
 
 		var hit = kdTree.intersect(orig, dir);
 		if (hit != null) {
-			hitP = hit[0];
-			hitPrim = hit[1];
+			var hitP = hit[0];
 			var brushColor = hexToRGB(brushColorPicker.value);
 			var brushedSplats = kdTree.queryNeighbors(hitP, brushRadiusSlider.value,
 				function(primID) {
@@ -508,7 +509,7 @@ window.onload = function() {
 
 var fillDatasetSelector = function() {
 	var selector = document.getElementById("datasets");
-	for (v in pointClouds) {
+	for (var v in pointClouds) {
 		var opt = document.createElement("option");
 		opt.value = v;
 		opt.innerHTML = v;

@@ -1,3 +1,5 @@
+'use strict';
+
 var ArcballCamera = function(center, zoomSpeed, screenDims) {
 	this.zoomSpeed = zoomSpeed;
 	this.invScreen = [1.0 / screenDims[0], 1.0 / screenDims[1]];
@@ -95,6 +97,37 @@ var pointDist = function(a, b) {
 	var v = [b[0] - a[0], b[1] - a[1]];
 	return Math.sqrt(Math.pow(v[0], 2.0) + Math.pow(v[1], 2.0));
 }
+
+'use strict';
+
+var Buffer = function(capacity, dtype) {
+	this.len = 0;
+	this.capacity = capacity;
+	if (dtype == "uint8") {
+		this.buffer = new Uint8Array(capacity);
+	} else if (dtype == "uint16") {
+		this.buffer = new Uint16Array(capacity);
+	}
+}
+
+Buffer.prototype.append = function(buf) {
+	if (this.len + buf.byteLength >= this.capacity) {
+		var newCap = Math.floor(this.capacity * 1.5);
+		var tmp = new (this.buffer.constructor)(newCap);
+		tmp.set(this.buffer);
+
+		this.capacity = newCap;
+		this.buffer = tmp;
+	}
+	this.buffer.set(buf, this.len);
+	this.len += buf.length;
+}
+
+Buffer.prototype.clear = function(buf) {
+	this.len = 0;
+}
+
+'use strict';
 
 /* The controller can register callbacks for various events on a canvas:
  *
@@ -271,6 +304,8 @@ Controller.prototype.registerForCanvas = function(canvas) {
 	canvas.addEventListener("touchend", touchEnd);
 }
 
+'use strict';
+
 var Shader = function(vertexSrc, fragmentSrc) {
 	var self = this;
 	this.program = compileShader(vertexSrc, fragmentSrc);
@@ -296,7 +331,7 @@ var Shader = function(vertexSrc, fragmentSrc) {
 		});
 	}
 
-	for (unif in this.uniforms) {
+	for (var unif in this.uniforms) {
 		this.uniforms[unif] = gl.getUniformLocation(this.program, unif);
 	}
 }
@@ -345,5 +380,17 @@ var getGLExtension = function(ext) {
 		return false;
 	}
 	return true;
+}
+
+'use strict';
+
+// Various utilities that don't really fit anywhere else
+
+var hexToRGB = function(hex) {
+	var val = parseInt(hex.substr(1), 16);
+	var r = (val >> 16) & 255;
+	var g = (val >> 8) & 255;
+	var b = val & 255;
+	return [r, g, b];
 }
 

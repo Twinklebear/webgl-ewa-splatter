@@ -1,3 +1,5 @@
+'use strict';
+
 var KdTree = function(numKdNodes, nodes, primIndices, bounds, surfels) {
 	this.numKdNodes = numKdNodes;
 	this.nodes = nodes;
