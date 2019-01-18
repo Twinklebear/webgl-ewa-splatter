@@ -141,8 +141,6 @@ int main(int argc, char **argv) {
 	ne.setViewPoint(0.0, 0.0, diagonal.z * 10.0);
 	ne.compute(*normals);
 
-	// TODO: Take a scale factor input to re-scale the surfels before writing.
-
 	std::vector<Surfel> surfels;
 	surfels.reserve(cloud->size());
 	for (size_t i = 0; i < cloud->size(); ++i) {
@@ -151,6 +149,9 @@ int main(int argc, char **argv) {
 		s.x = pclpt.x * scale_factor;
 		s.y = pclpt.y * scale_factor;
 		s.z = pclpt.z * scale_factor;
+
+		// TODO: The radius for each surfel should be its distance to its nearest
+		// N neighbors + some padding to fill holes
 		s.radius = avg_neighbor_dist * 2.5 * scale_factor;
 
 		s.nx = (*normals)[i].normal_x;
