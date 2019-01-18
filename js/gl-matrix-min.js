@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * @fileoverview gl-matrix - High performance matrix and vector operations
  * @author Brandon Jones
