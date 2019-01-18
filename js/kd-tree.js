@@ -1,3 +1,5 @@
+'use strict';
+
 const sizeofSurfel = 16;
 const sizeofKdNode = 16;
 
@@ -145,10 +147,12 @@ KdTree.prototype.queryLevel = function(level, query) {
 
 		// Take the surfels we took from the interior nodes or leaves and
 		// append them to our output buffer.
-		var pos = this.scratchPos.subarray(0, loadedSurfels * (sizeofSurfel / 2));
-		var color = this.scratchColor.subarray(0, loadedSurfels * 4);
-		query.pos.append(pos);
-		query.color.append(color);
+		if (loadedSurfels > 0) {
+			var pos = this.scratchPos.subarray(0, loadedSurfels * (sizeofSurfel / 2));
+			var color = this.scratchColor.subarray(0, loadedSurfels * 4);
+			query.pos.append(pos);
+			query.color.append(color);
+		}
 
 		// In the first two cases of the if we've hit the bottom of
 		// what we can traverse in this tree, and should pop the stack

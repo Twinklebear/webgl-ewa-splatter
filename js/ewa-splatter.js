@@ -1,3 +1,5 @@
+'use strict';
+
 // Vertices for the quad we intance to make the splats
 var splatVerts = [
 	-0.5, -0.5, 0,
@@ -375,7 +377,7 @@ window.onload = function() {
 
 var fillDatasetSelector = function() {
 	var selector = document.getElementById("datasets");
-	for (v in pointClouds) {
+	for (var v in pointClouds) {
 		var opt = document.createElement("option");
 		opt.value = v;
 		opt.innerHTML = v;
