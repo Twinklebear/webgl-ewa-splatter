@@ -16,6 +16,7 @@ var canvas = null;
 var proj = null;
 var camera = null;
 var projView = null;
+var frustum = null;
 
 var vao = null;
 var splatAttribVbo = null;
@@ -40,6 +41,7 @@ var numSplatsElem = null
 var traversalTimeElem = null
 var uploadTimeElem = null
 var renderTimeElem = null
+var updateFrustum = true;
 
 // For the render time targetting we could do progressive
 // rendering of the splats, or render at a lower resolution
@@ -181,6 +183,8 @@ var selectPointCloud = function() {
 					camera.zoom(-30);
 				}
 
+				projView = mat4.mul(projView, proj, camera.camera);
+
 				var startTraversal = new Date();
 				if (levelSelectionSlider.value != currentLevel || wasLoadingData) {
 					treeLevel.innerHTML = levelSelectionSlider.value;
@@ -188,7 +192,10 @@ var selectPointCloud = function() {
 
 					query.pos.clear();
 					query.color.clear();
-					query = kdTree.queryLevel(currentLevel, query);
+					if (updateFrustum || !frustum) {
+						frustum = new Frustum(projView);
+					}
+					query = kdTree.queryFrustum(frustum, camera.eyePos(), currentLevel, query);
 
 					wasLoadingData = activeLoadRequests > 0;
 					var endTraversal = new Date();
@@ -211,8 +218,6 @@ var selectPointCloud = function() {
 						uploadTimeElem.innerHTML = endUpload - startUpload;
 					}
 				}
-
-				projView = mat4.mul(projView, proj, camera.camera);
 
 				splatShader.use();
 				gl.uniformMatrix4fv(splatShader.uniforms["proj_view"], false, projView);
@@ -286,6 +291,13 @@ window.onload = function() {
 		alert("Required WebGL extensions missing, aborting");
 		return;
 	}
+
+	document.addEventListener("keydown", function(evt) {
+		if (evt.key == "Control") {
+			updateFrustum = !updateFrustum;
+			console.log("updateFrustum = " + updateFrustum);
+		}
+	});
 
 	WIDTH = canvas.width;
 	HEIGHT = canvas.height;
