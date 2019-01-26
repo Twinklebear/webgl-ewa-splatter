@@ -192,6 +192,37 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, level, query) {
 		return query;
 	}
 
+	var boxLower = vec4.create();
+	var boxUpper = vec4.create();
+	vec4.set(boxLower, this.bounds[0], this.bounds[1], this.bounds[2], 1.0);
+	vec4.set(boxUpper, this.bounds[3], this.bounds[4], this.bounds[5], 1.0);
+	boxUpper = vec4.transformMat4(boxUpper, boxUpper, projView);
+	boxUpper[0] /= boxUpper[3];
+	boxUpper[1] /= boxUpper[3];
+	boxUpper[2] /= boxUpper[3];
+	boxUpper[3] = 1.0;
+	console.log(boxUpper);
+
+	boxLower = vec4.transformMat4(boxLower, boxLower, projView);
+	boxLower[0] /= boxLower[3];
+	boxLower[1] /= boxLower[3];
+	boxLower[2] /= boxLower[3];
+	boxLower[3] = 1.0;
+	console.log(boxLower);
+
+	var boxDiag = vec4.create();
+	vec4.sub(boxDiag, boxUpper, boxLower);
+	console.log(boxDiag);
+	console.log("Root touches " + vec4.len(boxDiag) + " pixels via upper/lower?");
+
+	vec4.set(boxDiag, this.bounds[3] - this.bounds[0],
+		this.bounds[4] - this.bounds[1],
+		this.bounds[5] - this.bounds[2], 0.0);
+	// Determine the pixel footprint of the child node
+	boxDiag = vec4.transformMat4(boxDiag, boxDiag, projView);
+	console.log(boxDiag);
+	console.log("Root touches " + vec4.len(boxDiag) + " pixels");
+
 	var stackPos = 0;
 	var currentNode = 0;
 	var currentDepth = 0;
@@ -232,27 +263,32 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, level, query) {
 				}
 			}
 		} else {
-			// Determine which children are contained in the frustum and traverse them
-			// TODO: traverse the closer child first.
-			// Decode the parent LOD surfel to determine 
-			/*
-			var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
-			for (var j = 0; j < sizeofSurfel / 2; ++j) {
-				this.scratchPos[j] = this.positions[primOffset * (sizeofSurfel / 2) + j]
-			}
-			*/
 			var splitPos = nodeSplitPos(this.nodesFloatView, currentNode);
 			var splitAxis = nodeSplitAxis(this.nodes, currentNode);
 
 			var childVisible = [false, false];
-			// Check if the left/right child are visible
+			// Check if the left/right child are visible and within the
+			// pixel footprint LOD threshold
 			scratchBounds.set(currentBounds);
 			scratchBounds[3 + splitAxis] = splitPos;
 			childVisible[0] = frustum.containsBox(scratchBounds);
+			vec4.set(boxDiag, scratchBounds[3] - scratchBounds[0],
+				scratchBounds[4] - scratchBounds[1],
+				scratchBounds[5] - scratchBounds[2], 0);
+			// Determine the pixel footprint of the child node
+			boxDiag = vec4.transformMat4(boxDiag, boxDiag, projView);
+			childVisible[0] = childVisible[0] && vec4.len(boxDiag) > 2.0;
+
 
 			scratchBounds.set(currentBounds);
 			scratchBounds[splitAxis] = splitPos;
 			childVisible[1] = frustum.containsBox(scratchBounds);
+			vec4.set(boxDiag, scratchBounds[3] - scratchBounds[0],
+				scratchBounds[4] - scratchBounds[1],
+				scratchBounds[5] - scratchBounds[2], 0);
+			// Determine the pixel footprint of the child node
+			boxDiag = vec4.transformMat4(boxDiag, boxDiag, projView);
+			childVisible[1] = childVisible[1] && vec4.len(boxDiag) > 2.0;
 
 			var children = [nodeLeftChild(this.nodes, currentNode),
 				nodeRightChild(this.nodes, currentNode)];
