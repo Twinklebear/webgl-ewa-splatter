@@ -192,9 +192,8 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 		return query;
 	}
 
-	var boxLower = vec4.create();
-	var boxUpper = vec4.create();
-	var boxDiag = vec4.create();
+	var boxPoint = vec4.create();
+	var boxProjection = vec4.create();
 
 	var stackPos = 0;
 	var currentNode = 0;
@@ -206,24 +205,29 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 	while (true) {
 		var loadedSurfels = 0;
 
-		// TODO: Maybe just use distance from the eye to closest point of the box?
-		// To actually find the pixel footprint, we'd need to project all the box
-		// points and find the AABB of those to get a conservative bound
-		vec4.set(boxLower, currentBounds[0], currentBounds[1], currentBounds[2], 1.0);
-		boxLower = vec4.transformMat4(boxLower, boxLower, projView);
-		boxLower[0] = screen[0] * ((boxLower[0] / boxLower[3]) + 1) / 2.0;
-		boxLower[1] = screen[1] * ((boxLower[1] / boxLower[3]) + 1) / 2.0;
+		// TODO: This may be too expensive to do here for each inner node..
+		vec4.set(boxProjection, screen[0], screen[1], 0, 0);
+		for (var k = 0; k < 2; ++k) {
+			for (var j = 0; j < 2; ++j) {
+				for (var i = 0; i < 2; ++i) {
+					vec4.set(boxPoint, currentBounds[i * 3],
+						currentBounds[j * 3 + 1], currentBounds[k * 3 + 2], 1.0);
+					boxPoint = vec4.transformMat4(boxPoint, boxPoint, projView);
+					boxPoint[0] = screen[0] * ((boxPoint[0] / boxPoint[3]) + 1) / 2.0;
+					boxPoint[1] = screen[1] * ((boxPoint[1] / boxPoint[3]) + 1) / 2.0;
+					boxProjection[0] = Math.min(boxProjection[0], boxPoint[0]);
+					boxProjection[1] = Math.min(boxProjection[1], boxPoint[1]);
+					boxProjection[2] = Math.max(boxProjection[2], boxPoint[0]);
+					boxProjection[3] = Math.max(boxProjection[3], boxPoint[1]);
+				}
+			}
+		}
 
-		vec4.set(boxUpper, currentBounds[3], currentBounds[4], currentBounds[5], 1.0);
-		boxUpper = vec4.transformMat4(boxUpper, boxUpper, projView);
-		boxUpper[0] = screen[0] * ((boxUpper[0] / boxUpper[3]) + 1) / 2.0;
-		boxUpper[1] = screen[1] * ((boxUpper[1] / boxUpper[3]) + 1) / 2.0;
-
-		var screenSize = Math.sqrt(Math.pow(boxUpper[0] - boxLower[0], 2.0) +
-			Math.pow(boxUpper[1] - boxLower[1], 2.0));
+		var screenSize = Math.sqrt(Math.pow(boxProjection[2] - boxProjection[0], 2.0) +
+			Math.pow(boxProjection[3] - boxProjection[1], 2.0));
 
 		// Any leaf nodes within the frustum we just take the surfels and render
-		if (screenSize <= 10 || nodeIsLeaf(this.nodes, currentNode)) {
+		if (screenSize <= 20 || nodeIsLeaf(this.nodes, currentNode)) {
 			// If we've reached the desired level or the bottom of the tree,
 			// append this nodes surfel(s) to the list to be returned
 			var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
