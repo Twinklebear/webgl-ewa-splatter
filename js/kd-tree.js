@@ -181,7 +181,7 @@ KdTree.prototype.queryLevel = function(level, query) {
 	return query;
 }
 
-KdTree.prototype.queryFrustum = function(frustum, eyePos, level, query) {
+KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) {
 	if (!query) {
 		query = {
 			pos: new Buffer(128 * 2, "uint16"),
@@ -194,34 +194,7 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, level, query) {
 
 	var boxLower = vec4.create();
 	var boxUpper = vec4.create();
-	vec4.set(boxLower, this.bounds[0], this.bounds[1], this.bounds[2], 1.0);
-	vec4.set(boxUpper, this.bounds[3], this.bounds[4], this.bounds[5], 1.0);
-	boxUpper = vec4.transformMat4(boxUpper, boxUpper, projView);
-	boxUpper[0] /= boxUpper[3];
-	boxUpper[1] /= boxUpper[3];
-	boxUpper[2] /= boxUpper[3];
-	boxUpper[3] = 1.0;
-	console.log(boxUpper);
-
-	boxLower = vec4.transformMat4(boxLower, boxLower, projView);
-	boxLower[0] /= boxLower[3];
-	boxLower[1] /= boxLower[3];
-	boxLower[2] /= boxLower[3];
-	boxLower[3] = 1.0;
-	console.log(boxLower);
-
 	var boxDiag = vec4.create();
-	vec4.sub(boxDiag, boxUpper, boxLower);
-	console.log(boxDiag);
-	console.log("Root touches " + vec4.len(boxDiag) + " pixels via upper/lower?");
-
-	vec4.set(boxDiag, this.bounds[3] - this.bounds[0],
-		this.bounds[4] - this.bounds[1],
-		this.bounds[5] - this.bounds[2], 0.0);
-	// Determine the pixel footprint of the child node
-	boxDiag = vec4.transformMat4(boxDiag, boxDiag, projView);
-	console.log(boxDiag);
-	console.log("Root touches " + vec4.len(boxDiag) + " pixels");
 
 	var stackPos = 0;
 	var currentNode = 0;
@@ -232,8 +205,25 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, level, query) {
 	var scratchBounds = new Float32Array(6);
 	while (true) {
 		var loadedSurfels = 0;
+
+		// TODO: Maybe just use distance from the eye to closest point of the box?
+		// To actually find the pixel footprint, we'd need to project all the box
+		// points and find the AABB of those to get a conservative bound
+		vec4.set(boxLower, currentBounds[0], currentBounds[1], currentBounds[2], 1.0);
+		boxLower = vec4.transformMat4(boxLower, boxLower, projView);
+		boxLower[0] = screen[0] * ((boxLower[0] / boxLower[3]) + 1) / 2.0;
+		boxLower[1] = screen[1] * ((boxLower[1] / boxLower[3]) + 1) / 2.0;
+
+		vec4.set(boxUpper, currentBounds[3], currentBounds[4], currentBounds[5], 1.0);
+		boxUpper = vec4.transformMat4(boxUpper, boxUpper, projView);
+		boxUpper[0] = screen[0] * ((boxUpper[0] / boxUpper[3]) + 1) / 2.0;
+		boxUpper[1] = screen[1] * ((boxUpper[1] / boxUpper[3]) + 1) / 2.0;
+
+		var screenSize = Math.sqrt(Math.pow(boxUpper[0] - boxLower[0], 2.0) +
+			Math.pow(boxUpper[1] - boxLower[1], 2.0));
+
 		// Any leaf nodes within the frustum we just take the surfels and render
-		if (currentDepth == level || nodeIsLeaf(this.nodes, currentNode)) {
+		if (screenSize <= 10 || nodeIsLeaf(this.nodes, currentNode)) {
 			// If we've reached the desired level or the bottom of the tree,
 			// append this nodes surfel(s) to the list to be returned
 			var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
@@ -255,7 +245,8 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, level, query) {
 				for (var p = 0; p < numPrims; ++p) {
 					var prim = this.primIndices[primOffset + p];
 					for (var i = 0; i < sizeofSurfel / 2; ++i) {
-						this.scratchPos[p * (sizeofSurfel / 2) + i] = this.positions[prim * (sizeofSurfel / 2) + i]
+						this.scratchPos[p * (sizeofSurfel / 2) + i] =
+							this.positions[prim * (sizeofSurfel / 2) + i]
 					}
 					for (var i = 0; i < 4; ++i) {
 						this.scratchColor[p * 4 + i] = this.colors[prim * 4 + i]
@@ -272,23 +263,10 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, level, query) {
 			scratchBounds.set(currentBounds);
 			scratchBounds[3 + splitAxis] = splitPos;
 			childVisible[0] = frustum.containsBox(scratchBounds);
-			vec4.set(boxDiag, scratchBounds[3] - scratchBounds[0],
-				scratchBounds[4] - scratchBounds[1],
-				scratchBounds[5] - scratchBounds[2], 0);
-			// Determine the pixel footprint of the child node
-			boxDiag = vec4.transformMat4(boxDiag, boxDiag, projView);
-			childVisible[0] = childVisible[0] && vec4.len(boxDiag) > 2.0;
-
 
 			scratchBounds.set(currentBounds);
 			scratchBounds[splitAxis] = splitPos;
 			childVisible[1] = frustum.containsBox(scratchBounds);
-			vec4.set(boxDiag, scratchBounds[3] - scratchBounds[0],
-				scratchBounds[4] - scratchBounds[1],
-				scratchBounds[5] - scratchBounds[2], 0);
-			// Determine the pixel footprint of the child node
-			boxDiag = vec4.transformMat4(boxDiag, boxDiag, projView);
-			childVisible[1] = childVisible[1] && vec4.len(boxDiag) > 2.0;
 
 			var children = [nodeLeftChild(this.nodes, currentNode),
 				nodeRightChild(this.nodes, currentNode)];
@@ -331,7 +309,7 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, level, query) {
 						// If we've loaded this subtree, traverse it, otherwise request it if
 						// we're not already trying to load it
 						if (this.subtrees[children[i]]) {
-							query = this.subtrees[children[i]].queryFrustum(frustum, eyePos,
+							query = this.subtrees[children[i]].queryFrustum(frustum, eyePos, screen,
 								level - currentDepth - 1, query);
 						} else {
 							// Show the parent LOD surfel as a placehold while we load

@@ -186,37 +186,34 @@ var selectPointCloud = function() {
 				projView = mat4.mul(projView, proj, camera.camera);
 
 				var startTraversal = new Date();
-				if (levelSelectionSlider.value != currentLevel || wasLoadingData) {
-					treeLevel.innerHTML = levelSelectionSlider.value;
-					currentLevel = levelSelectionSlider.value;
+				treeLevel.innerHTML = levelSelectionSlider.value;
+				currentLevel = levelSelectionSlider.value;
 
-					query.pos.clear();
-					query.color.clear();
-					if (updateFrustum || !frustum) {
-						frustum = new Frustum(projView);
-					}
-					query = kdTree.queryFrustum(frustum, camera.eyePos(), currentLevel, query);
+				query.pos.clear();
+				query.color.clear();
+				frustum = new Frustum(projView);
+				query = kdTree.queryFrustum(frustum, camera.eyePos(), [WIDTH, HEIGHT],
+					currentLevel, query);
 
-					wasLoadingData = activeLoadRequests > 0;
-					var endTraversal = new Date();
-					if (query.len != 0) {
-						var startUpload = new Date();
-						gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
-						gl.bufferData(gl.ARRAY_BUFFER, query.pos.buffer, gl.DYNAMIC_DRAW,
-							0, query.pos.len);
+				wasLoadingData = activeLoadRequests > 0;
+				var endTraversal = new Date();
+				if (query.len != 0) {
+					var startUpload = new Date();
+					gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[0]);
+					gl.bufferData(gl.ARRAY_BUFFER, query.pos.buffer, gl.DYNAMIC_DRAW,
+						0, query.pos.len);
 
-						gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
-						gl.bufferData(gl.ARRAY_BUFFER, query.color.buffer, gl.DYNAMIC_DRAW,
-							0, query.color.len);
+					gl.bindBuffer(gl.ARRAY_BUFFER, splatAttribVbo[1]);
+					gl.bufferData(gl.ARRAY_BUFFER, query.color.buffer, gl.DYNAMIC_DRAW,
+						0, query.color.len);
 
-						var endUpload = new Date();
+					var endUpload = new Date();
 
-						numSurfels = query.pos.len / (sizeofSurfel / 2);
-						numSplatsElem.innerHTML = numSurfels;
+					numSurfels = query.pos.len / (sizeofSurfel / 2);
+					numSplatsElem.innerHTML = numSurfels;
 
-						traversalTimeElem.innerHTML = endTraversal - startTraversal;
-						uploadTimeElem.innerHTML = endUpload - startUpload;
-					}
+					traversalTimeElem.innerHTML = endTraversal - startTraversal;
+					uploadTimeElem.innerHTML = endUpload - startUpload;
 				}
 
 				splatShader.use();
