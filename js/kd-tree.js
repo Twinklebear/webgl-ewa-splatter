@@ -201,6 +201,28 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 	var currentBounds = new Float32Array(6);
 	currentBounds.set(this.bounds);
 
+	vec4.set(boxProjection, screen[0], screen[1], 0, 0);
+	for (var k = 0; k < 2; ++k) {
+		for (var j = 0; j < 2; ++j) {
+			for (var i = 0; i < 2; ++i) {
+				vec4.set(boxPoint, currentBounds[i * 3],
+					currentBounds[j * 3 + 1], currentBounds[k * 3 + 2], 1.0);
+				boxPoint = vec4.transformMat4(boxPoint, boxPoint, projView);
+				boxPoint[0] = screen[0] * ((boxPoint[0] / boxPoint[3]) + 1) / 2.0;
+				boxPoint[1] = screen[1] * ((boxPoint[1] / boxPoint[3]) + 1) / 2.0;
+				boxProjection[0] = Math.min(boxProjection[0], boxPoint[0]);
+				boxProjection[1] = Math.min(boxProjection[1], boxPoint[1]);
+				boxProjection[2] = Math.max(boxProjection[2], boxPoint[0]);
+				boxProjection[3] = Math.max(boxProjection[3], boxPoint[1]);
+			}
+		}
+	}
+
+	var screenSize = Math.sqrt(Math.pow(boxProjection[2] - boxProjection[0], 2.0) +
+		Math.pow(boxProjection[3] - boxProjection[1], 2.0));
+
+	console.log("Level " + level + " current bounds: " + currentBounds + " screen size: " + screenSize);
+
 	var scratchBounds = new Float32Array(6);
 	while (true) {
 		var loadedSurfels = 0;
@@ -227,7 +249,7 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 			Math.pow(boxProjection[3] - boxProjection[1], 2.0));
 
 		// Any leaf nodes within the frustum we just take the surfels and render
-		if (screenSize <= 20 || nodeIsLeaf(this.nodes, currentNode)) {
+		if (screenSize <= 50 || nodeIsLeaf(this.nodes, currentNode)) {
 			// If we've reached the desired level or the bottom of the tree,
 			// append this nodes surfel(s) to the list to be returned
 			var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
@@ -241,6 +263,7 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 				}
 			} else {
 				var numPrims = nodeNumPrims(this.nodes, currentNode);
+				numPrims = 2;
 				loadedSurfels = numPrims;
 				if (numPrims * sizeofSurfel > this.scratchPos.byteLength) {
 					this.scratchPos = new Uint16Array(numPrims * (sizeofSurfel / 2));
@@ -314,7 +337,7 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 						// we're not already trying to load it
 						if (this.subtrees[children[i]]) {
 							query = this.subtrees[children[i]].queryFrustum(frustum, eyePos, screen,
-								level - currentDepth - 1, query);
+								currentDepth + 1, query);
 						} else {
 							// Show the parent LOD surfel as a placehold while we load
 							var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
@@ -331,7 +354,7 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 							if (!this.loading[children[i]] && activeLoadRequests < 8) {
 								this.loading[children[i]] = 1;
 								var dataset = {
-									url: "tools/build/" + children[i] + ".srsf",
+									url: "tools/build/living_room/" + children[i] + ".srsf",
 									testing: true,
 									tree: children[i]
 								};

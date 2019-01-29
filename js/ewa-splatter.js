@@ -52,7 +52,7 @@ const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 
 var pointClouds = {
 	"Test": {
-		url: "tools/build/0.srsf",
+		url: "tools/build/living_room/0.srsf",
 		testing: true,
 		size: 100
 	},

@@ -162,7 +162,7 @@ StreamingSplatKdTree::StreamingSplatKdTree(const std::vector<Surfel> &insurfels)
 	: surfels(insurfels),
 	max_depth(8 + 1.3 * std::log2(insurfels.size())),
 	tree_depth(0),
-	min_prims(64)
+	min_prims(32)
 {
 	if (surfels.size() > std::pow(2, 30)) {
 		std::cout << "Too many surfels in one streaming kd tree!\n";
