@@ -17,6 +17,7 @@ var proj = null;
 var camera = null;
 var projView = null;
 var frustum = null;
+var updateFrustum = true;
 
 var vao = null;
 var splatAttribVbo = null;
@@ -41,7 +42,6 @@ var numSplatsElem = null
 var traversalTimeElem = null
 var uploadTimeElem = null
 var renderTimeElem = null
-var updateFrustum = true;
 
 // For the render time targetting we could do progressive
 // rendering of the splats, or render at a lower resolution
@@ -52,7 +52,7 @@ const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
 
 var pointClouds = {
 	"Test": {
-		url: "tools/build/living_room/0.srsf",
+		url: "tools/build/web-meb/0.srsf",
 		testing: true,
 		size: 100
 	},
@@ -91,7 +91,7 @@ var loadKdTree = function(dataset, onload) {
 	if (!dataset.file) {
 		var url = "https://www.dl.dropboxusercontent.com/s/" + dataset.url + "?dl=1";
 		if (dataset.testing) {
-			url = dataset.url;
+			url = "http://localhost:8000/" + dataset.url;
 		}
 		var req = new XMLHttpRequest();
 
@@ -186,12 +186,13 @@ var selectPointCloud = function() {
 				projView = mat4.mul(projView, proj, camera.camera);
 
 				var startTraversal = new Date();
-				treeLevel.innerHTML = levelSelectionSlider.value;
 				currentLevel = levelSelectionSlider.value;
 
 				query.pos.clear();
 				query.color.clear();
-				frustum = new Frustum(projView);
+				if (updateFrustum) {
+					frustum = new Frustum(projView);
+				}
 				query = kdTree.queryFrustum(frustum, camera.eyePos(), [WIDTH, HEIGHT],
 					currentLevel, query);
 
@@ -216,6 +217,7 @@ var selectPointCloud = function() {
 					uploadTimeElem.innerHTML = endUpload - startUpload;
 				}
 
+				var startRender = new Date();
 				splatShader.use();
 				gl.uniformMatrix4fv(splatShader.uniforms["proj_view"], false, projView);
 				gl.uniform3fv(splatShader.uniforms["eye_pos"], camera.eyePos());
@@ -247,7 +249,7 @@ var selectPointCloud = function() {
 				// Wait for rendering to actually finish so we can time it
 				gl.finish();
 				var endTime = new Date();
-				var renderTime = endTime - startTime;
+				var renderTime = endTime - startRender;
 				renderTimeElem.innerHTML = renderTime;
 				// TODO: If we have a nicer LOD ordering of the point cloud,
 				// we can adjust to keep the frame-rate constant by rendering
@@ -270,8 +272,6 @@ window.onload = function() {
 
 	levelSelectionSlider = document.getElementById("levelSelectionSlider");
 	levelSelectionSlider.value = 0;
-	treeLevel = document.getElementById("treeLevel");
-	treeLevel.innerHTML = levelSelectionSlider.value;
 
 	numSplatsElem = document.getElementById("numSplats");
 	traversalTimeElem = document.getElementById("traversalTime");
