@@ -12,6 +12,17 @@
  * - Stop doing frustum culling tests if we find at some level the
  *   node is entirely in the frustum, since we then know all it's children
  *   must be contained too.
+ * 
+ * - Different thing, but pick up the page tree idea from
+ *   Fraedrich et al. '09 as well, or something similar to merge the small
+ *   sub-tree files into larger groups. This will help cut down network
+ *   traffic by aggregating it over more files.
+ *
+ * - Maybe the setInterval should be adjusted some to decrease the
+ *   frequency? It could be that we're just choking/hiccuping JS on
+ *   some other crap with all the network traffic going on and the
+ *   setInterval being called too frequently, since it takes more than
+ *   32ms to finish.
  */
 
 const sizeofSurfel = 16;
