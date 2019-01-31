@@ -1,5 +1,19 @@
 'use strict';
 
+/* Some remaining things to try for perf:
+ *
+ * - Merge the tree traversal into a single function call instead of
+ *   descending into the children recursively. This will reduce a lot
+ *   the GC churn from the function calls/local vars/etc
+ *
+ * - Use the cheaper error metric from Fraedrich et al. '09, this will
+ *   get rid of the need to do the box projection.
+ *
+ * - Stop doing frustum culling tests if we find at some level the
+ *   node is entirely in the frustum, since we then know all it's children
+ *   must be contained too.
+ */
+
 const sizeofSurfel = 16;
 const sizeofKdNode = 16;
 
