@@ -352,6 +352,7 @@ Buffer.prototype.append = function(buf) {
 
 		this.capacity = newCap;
 		this.buffer = tmp;
+		console.log("allocing buf");
 	}
 	this.buffer.set(buf, this.len);
 	this.len += buf.length;

@@ -62,6 +62,8 @@ var KdTree = function(dataBuffer) {
 	// Scratch space to use when querying, enough to hold one leaf in the tree
 	this.scratchPos = new Uint16Array(128 * (sizeofSurfel / 2));
 	this.scratchColor = new Uint8Array(128 * 4);
+	this.scratchBounds = [new Float32Array(6), new Float32Array(6)];
+	this.scratchBoxCenter = vec3.create();
 
 	this.nodeStack = new Uint32Array(64);
 	this.nodeStackDepths = new Uint32Array(64);
@@ -69,145 +71,9 @@ var KdTree = function(dataBuffer) {
 	this.nodeStackBoxes = new Float32Array(64 * 6);
 }
 
-// For testing: Load all surfels from a specific level of the tree, and return
-// the combined position and attribute buffers for rendering
-KdTree.prototype.queryLevel = function(level, query) {
-	if (!query) {
-		query = {
-			pos: new Buffer(128 * 2, "uint16"),
-			color: new Buffer(128 * 4, "uint8"),
-		};
-	}
-
-	var stackPos = 0;
-	var currentNode = 0;
-	var currentDepth = 0;
-	var currentBounds = new Float32Array(6);
-	currentBounds.set(this.bounds);
-
-	while (true) {
-		var loadedSurfels = 0;
-		if (currentDepth == level || nodeIsLeaf(this.nodes, currentNode)) {
-			// If we've reached the desired level or the bottom of the tree,
-			// append this nodes surfel(s) to the list to be returned
-			var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
-			if (!nodeIsLeaf(this.nodes, currentNode)) {
-				loadedSurfels = 1;
-				for (var i = 0; i < sizeofSurfel / 2; ++i) {
-					this.scratchPos[i] = this.positions[primOffset * (sizeofSurfel / 2) + i]
-				}
-				for (var i = 0; i < 4; ++i) {
-					this.scratchColor[i] = this.colors[primOffset * 4 + i]
-				}
-			} else {
-				var numPrims = nodeNumPrims(this.nodes, currentNode);
-				loadedSurfels = numPrims;
-				if (numPrims * sizeofSurfel > this.scratchPos.byteLength) {
-					this.scratchPos = new Uint16Array(numPrims * (sizeofSurfel / 2));
-					this.scratchColor = new Uint8Array(numPrims * 4);
-				}
-				for (var p = 0; p < numPrims; ++p) {
-					var prim = this.primIndices[primOffset + p];
-					for (var i = 0; i < sizeofSurfel / 2; ++i) {
-						this.scratchPos[p * (sizeofSurfel / 2) + i] = this.positions[prim * (sizeofSurfel / 2) + i]
-					}
-					for (var i = 0; i < 4; ++i) {
-						this.scratchColor[p * 4 + i] = this.colors[prim * 4 + i]
-					}
-				}
-			}
-		} else if (currentDepth < level) {
-			var children = [nodeLeftChild(this.nodes, currentNode),
-				nodeRightChild(this.nodes, currentNode)];
-			var external = [leftChildExternal(this.nodes, currentNode),
-				rightChildExternal(this.nodes, currentNode)];
-
-			var splitPos = nodeSplitPos(this.nodesFloatView, currentNode);
-			var splitAxis = nodeSplitAxis(this.nodes, currentNode);
-
-			// If neither child is external push them onto the stack and traverse them
-			if (!external[0] && !external[1]) {
-				this.nodeStack[stackPos] = children[1];
-				this.nodeStackDepths[stackPos] = currentDepth + 1;
-				this.nodeStackBoxes.set(currentBounds, stackPos * 6);
-				this.nodeStackBoxes[stackPos * 6 + splitAxis] = splitPos;
-				stackPos += 1;
-
-				currentNode = children[0];
-				currentDepth += 1;
-				currentBounds[3 + splitAxis] = splitPos;
-				continue;
-			} else {
-				// Otherwise, one or both children are external and we need to find
-				// their subtree and traverse it or start loading it.
-				for (var i = 0; i < 2; ++i) {
-					if (external[i]) {
-						// If we've loaded this subtree, traverse it, otherwise request it if
-						// we're not already trying to load it
-						if (this.subtrees[children[i]]) {
-							query = this.subtrees[children[i]].queryLevel(level - currentDepth - 1, query);
-						} else {
-							// Show the parent LOD surfel as a placehold while we load
-							var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
-							loadedSurfels = 1;
-							for (var j = 0; j < sizeofSurfel / 2; ++j) {
-								this.scratchPos[j] = this.positions[primOffset * (sizeofSurfel / 2) + j]
-							}
-							for (var j = 0; j < 4; ++j) {
-								this.scratchColor[j] = this.colors[primOffset * 4 + j]
-							}
-
-							// Request to load the subtree if we're not already doing so, and
-							// have not hit the request rate limit we're setting
-							if (!this.loading[children[i]] && activeLoadRequests < 8) {
-								this.loading[children[i]] = 1;
-								var dataset = {
-									url: "tools/build/" + children[i] + ".srsf",
-									testing: true,
-									tree: children[i]
-								};
-								var self = this;
-								loadKdTree(dataset, function(ds, buffer) {
-									self.subtrees[ds.tree] = new KdTree(buffer);
-									self.loading[ds.tree] = null;
-								});
-							}
-						}
-					} else {
-						// This won't happen b/c of how I build the trees
-						alert("ERROR: mixed external/internal node");
-					}
-				}
-			}
-		}
-
-		// Take the surfels we took from the interior nodes or leaves and
-		// append them to our output buffer.
-		if (loadedSurfels > 0) {
-			var pos = this.scratchPos.subarray(0, loadedSurfels * (sizeofSurfel / 2));
-			var color = this.scratchColor.subarray(0, loadedSurfels * 4);
-			query.pos.append(pos);
-			query.color.append(color);
-		}
-
-		// In the first two cases of the if we've hit the bottom of
-		// what we can traverse in this tree, and should pop the stack
-		if (stackPos > 0) {
-			stackPos -= 1;
-			currentNode = this.nodeStack[stackPos];
-			currentDepth = this.nodeStackDepths[stackPos];
-			for (var i = 0; i < 6; ++i) {
-				currentBounds[i] = this.nodeStackBoxes[stackPos * 6 + i];
-			}
-		} else {
-			break;
-		}
-	}
-	return query;
-}
-
 KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) {
 	if (!query) {
+		console.log("allocing query");
 		query = {
 			pos: new Buffer(128 * 2, "uint16"),
 			color: new Buffer(128 * 4, "uint8"),
@@ -217,64 +83,34 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 		return query;
 	}
 
-	var boxPoint = vec4.create();
-	var boxProjection = vec4.create();
+	var boxCenter = this.scratchBoxCenter;
 
 	var stackPos = 0;
 	var currentNode = 0;
 	var currentDepth = 0;
-	var currentBounds = new Float32Array(6);
+	var currentBounds = this.scratchBounds[0];
 	currentBounds.set(this.bounds);
 
-	vec4.set(boxProjection, screen[0], screen[1], 0, 0);
-	for (var k = 0; k < 2; ++k) {
-		for (var j = 0; j < 2; ++j) {
-			for (var i = 0; i < 2; ++i) {
-				vec4.set(boxPoint, currentBounds[i * 3],
-					currentBounds[j * 3 + 1], currentBounds[k * 3 + 2], 1.0);
-				boxPoint = vec4.transformMat4(boxPoint, boxPoint, projView);
-				boxPoint[0] = screen[0] * ((boxPoint[0] / boxPoint[3]) + 1) / 2.0;
-				boxPoint[1] = screen[1] * ((boxPoint[1] / boxPoint[3]) + 1) / 2.0;
-				boxProjection[0] = Math.min(boxProjection[0], boxPoint[0]);
-				boxProjection[1] = Math.min(boxProjection[1], boxPoint[1]);
-				boxProjection[2] = Math.max(boxProjection[2], boxPoint[0]);
-				boxProjection[3] = Math.max(boxProjection[3], boxPoint[1]);
-			}
-		}
-	}
+	var children = [0, 0];
+	var external = [0, 0];
+	var childVisible = [false, false];
 
-	var screenSize = Math.sqrt(Math.pow(boxProjection[2] - boxProjection[0], 2.0) +
-		Math.pow(boxProjection[3] - boxProjection[1], 2.0));
-
-	console.log("Level " + level + " current bounds: " + currentBounds + " screen size: " + screenSize);
-
-	var scratchBounds = new Float32Array(6);
+	var scratchBounds = this.scratchBounds[1];
 	while (true) {
 		var loadedSurfels = 0;
 
-		// TODO: This may be too expensive to do here for each inner node..
-		vec4.set(boxProjection, screen[0], screen[1], 0, 0);
-		for (var k = 0; k < 2; ++k) {
-			for (var j = 0; j < 2; ++j) {
-				for (var i = 0; i < 2; ++i) {
-					vec4.set(boxPoint, currentBounds[i * 3],
-						currentBounds[j * 3 + 1], currentBounds[k * 3 + 2], 1.0);
-					boxPoint = vec4.transformMat4(boxPoint, boxPoint, projView);
-					boxPoint[0] = screen[0] * ((boxPoint[0] / boxPoint[3]) + 1) / 2.0;
-					boxPoint[1] = screen[1] * ((boxPoint[1] / boxPoint[3]) + 1) / 2.0;
-					boxProjection[0] = Math.min(boxProjection[0], boxPoint[0]);
-					boxProjection[1] = Math.min(boxProjection[1], boxPoint[1]);
-					boxProjection[2] = Math.max(boxProjection[2], boxPoint[0]);
-					boxProjection[3] = Math.max(boxProjection[3], boxPoint[1]);
-				}
-			}
-		}
-
-		var screenSize = Math.sqrt(Math.pow(boxProjection[2] - boxProjection[0], 2.0) +
-			Math.pow(boxProjection[3] - boxProjection[1], 2.0));
+		vec3.set(boxCenter, currentBounds[0] + 0.5 * (currentBounds[3] - currentBounds[0]),
+			currentBounds[1] + 0.5 * (currentBounds[4] - currentBounds[1]),
+			currentBounds[2] + 0.5 * (currentBounds[5] - currentBounds[2]));
+		vec3.sub(boxCenter, boxCenter, eyePos);
+		var eyeDist = vec3.len(boxCenter);
+		var diagLen = Math.sqrt(Math.pow(currentBounds[3] - currentBounds[0], 2.0) +
+			Math.pow(currentBounds[4] - currentBounds[1], 2.0) +
+			Math.pow(currentBounds[5] - currentBounds[2], 2.0));
+		var err = diagLen / eyeDist;
 
 		// Any leaf nodes within the frustum we just take the surfels and render
-		if (screenSize <= 50 || nodeIsLeaf(this.nodes, currentNode)) {
+		if (err <= 0.05 || nodeIsLeaf(this.nodes, currentNode)) {
 			// If we've reached the desired level or the bottom of the tree,
 			// append this nodes surfel(s) to the list to be returned
 			var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
@@ -288,9 +124,9 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 				}
 			} else {
 				var numPrims = nodeNumPrims(this.nodes, currentNode);
-				numPrims = 2;
 				loadedSurfels = numPrims;
 				if (numPrims * sizeofSurfel > this.scratchPos.byteLength) {
+					console.log("growing scratch");
 					this.scratchPos = new Uint16Array(numPrims * (sizeofSurfel / 2));
 					this.scratchColor = new Uint8Array(numPrims * 4);
 				}
@@ -306,10 +142,14 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 				}
 			}
 		} else {
+			children = [nodeLeftChild(this.nodes, currentNode),
+				nodeRightChild(this.nodes, currentNode)];
+			external = [leftChildExternal(this.nodes, currentNode),
+				rightChildExternal(this.nodes, currentNode)];
+
 			var splitPos = nodeSplitPos(this.nodesFloatView, currentNode);
 			var splitAxis = nodeSplitAxis(this.nodes, currentNode);
 
-			var childVisible = [false, false];
 			// Check if the left/right child are visible and within the
 			// pixel footprint LOD threshold
 			scratchBounds.set(currentBounds);
@@ -319,11 +159,6 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 			scratchBounds.set(currentBounds);
 			scratchBounds[splitAxis] = splitPos;
 			childVisible[1] = frustum.containsBox(scratchBounds);
-
-			var children = [nodeLeftChild(this.nodes, currentNode),
-				nodeRightChild(this.nodes, currentNode)];
-			var external = [leftChildExternal(this.nodes, currentNode),
-				rightChildExternal(this.nodes, currentNode)];
 
 			// If neither child is external push them onto the stack and traverse them
 			if (!external[0] && !external[1]) {
@@ -379,7 +214,146 @@ KdTree.prototype.queryFrustum = function(frustum, eyePos, screen, level, query) 
 							if (!this.loading[children[i]] && activeLoadRequests < 8) {
 								this.loading[children[i]] = 1;
 								var dataset = {
-									url: "tools/build/living_room/" + children[i] + ".srsf",
+									url: "tools/build/web-meb/" + children[i] + ".srsf",
+									testing: true,
+									tree: children[i]
+								};
+								var self = this;
+								loadKdTree(dataset, function(ds, buffer) {
+									self.subtrees[ds.tree] = new KdTree(buffer);
+									self.loading[ds.tree] = null;
+								});
+							}
+						}
+					} else {
+						// This won't happen b/c of how I build the trees
+						alert("ERROR: mixed external/internal node");
+					}
+				}
+			}
+		}
+
+		// Take the surfels we took from the interior nodes or leaves and
+		// append them to our output buffer.
+		if (loadedSurfels > 0) {
+			var pos = this.scratchPos.subarray(0, loadedSurfels * (sizeofSurfel / 2));
+			var color = this.scratchColor.subarray(0, loadedSurfels * 4);
+			query.pos.append(pos);
+			query.color.append(color);
+		}
+
+		// In the first two cases of the if we've hit the bottom of
+		// what we can traverse in this tree, and should pop the stack
+		if (stackPos > 0) {
+			stackPos -= 1;
+			currentNode = this.nodeStack[stackPos];
+			currentDepth = this.nodeStackDepths[stackPos];
+			for (var i = 0; i < 6; ++i) {
+				currentBounds[i] = this.nodeStackBoxes[stackPos * 6 + i];
+			}
+		} else {
+			break;
+		}
+	}
+	return query;
+}
+
+// For testing: Load all surfels from a specific level of the tree, and return
+// the combined position and attribute buffers for rendering
+KdTree.prototype.queryLevel = function(level, query) {
+	if (!query) {
+		query = {
+			pos: new Buffer(128 * 2, "uint16"),
+			color: new Buffer(128 * 4, "uint8"),
+		};
+	}
+
+	var stackPos = 0;
+	var currentNode = 0;
+	var currentDepth = 0;
+	var currentBounds = new Float32Array(6);
+	currentBounds.set(this.bounds);
+	var children = [0, 0];
+	var external = [0, 0];
+
+	while (true) {
+		var loadedSurfels = 0;
+		if (currentDepth == level || nodeIsLeaf(this.nodes, currentNode)) {
+			// If we've reached the desired level or the bottom of the tree,
+			// append this nodes surfel(s) to the list to be returned
+			var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
+			if (!nodeIsLeaf(this.nodes, currentNode)) {
+				loadedSurfels = 1;
+				for (var i = 0; i < sizeofSurfel / 2; ++i) {
+					this.scratchPos[i] = this.positions[primOffset * (sizeofSurfel / 2) + i]
+				}
+				for (var i = 0; i < 4; ++i) {
+					this.scratchColor[i] = this.colors[primOffset * 4 + i]
+				}
+			} else {
+				var numPrims = nodeNumPrims(this.nodes, currentNode);
+				loadedSurfels = numPrims;
+				if (numPrims * sizeofSurfel > this.scratchPos.byteLength) {
+					this.scratchPos = new Uint16Array(numPrims * (sizeofSurfel / 2));
+					this.scratchColor = new Uint8Array(numPrims * 4);
+				}
+				for (var p = 0; p < numPrims; ++p) {
+					var prim = this.primIndices[primOffset + p];
+					for (var i = 0; i < sizeofSurfel / 2; ++i) {
+						//this.scratchPos[p * (sizeofSurfel / 2) + i] = this.positions[prim * (sizeofSurfel / 2) + i]
+					}
+					for (var i = 0; i < 4; ++i) {
+						//this.scratchColor[p * 4 + i] = this.colors[prim * 4 + i]
+					}
+				}
+			}
+		} else if (currentDepth < level) {
+			var splitPos = nodeSplitPos(this.nodesFloatView, currentNode);
+			var splitAxis = nodeSplitAxis(this.nodes, currentNode);
+
+			children = [nodeLeftChild(this.nodes, currentNode),
+				nodeRightChild(this.nodes, currentNode)];
+			external = [leftChildExternal(this.nodes, currentNode),
+				rightChildExternal(this.nodes, currentNode)];
+
+			// If neither child is external push them onto the stack and traverse them
+			if (!external[0] && !external[1]) {
+				this.nodeStack[stackPos] = children[1];
+				this.nodeStackDepths[stackPos] = currentDepth + 1;
+				this.nodeStackBoxes.set(currentBounds, stackPos * 6);
+				this.nodeStackBoxes[stackPos * 6 + splitAxis] = splitPos;
+				stackPos += 1;
+
+				currentNode = children[0];
+				currentDepth += 1;
+				currentBounds[3 + splitAxis] = splitPos;
+				continue;
+			} else {
+				// Otherwise, one or both children are external and we need to find
+				// their subtree and traverse it or start loading it.
+				for (var i = 0; i < 2; ++i) {
+					if (external[i]) {
+						// If we've loaded this subtree, traverse it, otherwise request it if
+						// we're not already trying to load it
+						if (this.subtrees[children[i]]) {
+							query = this.subtrees[children[i]].queryLevel(level - currentDepth - 1, query);
+						} else {
+							// Show the parent LOD surfel as a placehold while we load
+							var primOffset = nodePrimIndicesOffset(this.nodes, currentNode);
+							loadedSurfels = 1;
+							for (var j = 0; j < sizeofSurfel / 2; ++j) {
+								this.scratchPos[j] = this.positions[primOffset * (sizeofSurfel / 2) + j]
+							}
+							for (var j = 0; j < 4; ++j) {
+								this.scratchColor[j] = this.colors[primOffset * 4 + j]
+							}
+
+							// Request to load the subtree if we're not already doing so, and
+							// have not hit the request rate limit we're setting
+							if (!this.loading[children[i]] && activeLoadRequests < 8) {
+								this.loading[children[i]] = 1;
+								var dataset = {
+									url: "tools/build/" + children[i] + ".srsf",
 									testing: true,
 									tree: children[i]
 								};
