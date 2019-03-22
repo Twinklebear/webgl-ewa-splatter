@@ -1,14 +1,199 @@
 'use strict';
+// Compute the view frustum in world space from the provided
+// column major projection * view matrix
+var Frustum = function(projView) {
+	var rows = [vec4.create(), vec4.create(), vec4.create(), vec4.create()];
+	for (var i = 0; i < rows.length; ++i) {
+		rows[i] = vec4.set(rows[i], projView[i], projView[4 + i],
+			projView[8 + i], projView[12 + i]);
+	}
 
-var ArcballCamera = function(center, zoomSpeed, screenDims) {
+	this.planes = [
+		// -x plane
+		vec4.add(vec4.create(), rows[3], rows[0]),
+		// +x plane
+		vec4.sub(vec4.create(), rows[3], rows[0]),
+		// -y plane
+		vec4.add(vec4.create(), rows[3], rows[1]),
+		// +y plane
+		vec4.sub(vec4.create(), rows[3], rows[1]),
+		// -z plane
+		vec4.add(vec4.create(), rows[3], rows[2]),
+		// +z plane
+		vec4.sub(vec4.create(), rows[3], rows[2])
+	];
+
+	// Normalize the planes
+	for (var i = 0; i < this.planes.length; ++i) {
+		var s = 1.0 / Math.sqrt(this.planes[i][0] * this.planes[i][0] +
+			this.planes[i][1] * this.planes[i][1] + this.planes[i][2] * this.planes[i][2]);
+		this.planes[i][0] *= s;
+		this.planes[i][1] *= s;
+		this.planes[i][2] *= s;
+		this.planes[i][3] *= s;
+	}
+
+	// Compute the frustum points as well
+	var invProjView = mat4.invert(mat4.create(), projView);
+	this.points = [
+		// x_l, y_l, z_l
+		vec4.set(vec4.create(), -1, -1, -1, 1),
+		// x_h, y_l, z_l
+		vec4.set(vec4.create(), 1, -1, -1, 1),
+		// x_l, y_h, z_l
+		vec4.set(vec4.create(), -1, 1, -1, 1),
+		// x_h, y_h, z_l
+		vec4.set(vec4.create(), 1, 1, -1, 1),
+		// x_l, y_l, z_h
+		vec4.set(vec4.create(), -1, -1, 1, 1),
+		// x_h, y_l, z_h
+		vec4.set(vec4.create(), 1, -1, 1, 1),
+		// x_l, y_h, z_h
+		vec4.set(vec4.create(), -1, 1, 1, 1),
+		// x_h, y_h, z_h
+		vec4.set(vec4.create(), 1, 1, 1, 1)
+	];
+	for (var i = 0; i < 8; ++i) {
+		this.points[i] = vec4.transformMat4(this.points[i], this.points[i], invProjView);
+		this.points[i][0] /= this.points[i][3];
+		this.points[i][1] /= this.points[i][3];
+		this.points[i][2] /= this.points[i][3];
+		this.points[i][3] = 1.0;
+	}
+}
+
+// Check if the box is contained in the Frustum
+// The box should be [x_lower, y_lower, z_lower, x_upper, y_upper, z_upper]
+// This is done using Inigo Quilez's approach to help with large
+// bounds: https://www.iquilezles.org/www/articles/frustumcorrect/frustumcorrect.htm
+Frustum.prototype.containsBox = function(box) {
+	// Test the box against each plane
+	var vec = vec4.create();
+	var out = 0;
+	for (var i = 0; i < this.planes.length; ++i) {
+		out = 0;
+		// x_l, y_l, z_l
+		vec4.set(vec, box[0], box[1], box[2], 1.0);
+		out += vec4.dot(this.planes[i], vec) < 0.0 ? 1 : 0;
+		// x_h, y_l, z_l
+		vec4.set(vec, box[3], box[1], box[2], 1.0);
+		out += vec4.dot(this.planes[i], vec) < 0.0 ? 1 : 0;
+		// x_l, y_h, z_l
+		vec4.set(vec, box[0], box[4], box[2], 1.0);
+		out += vec4.dot(this.planes[i], vec) < 0.0 ? 1 : 0;
+		// x_h, y_h, z_l
+		vec4.set(vec, box[3], box[4], box[2], 1.0);
+		out += vec4.dot(this.planes[i], vec) < 0.0 ? 1 : 0;
+		// x_l, y_l, z_h
+		vec4.set(vec, box[0], box[1], box[5], 1.0);
+		out += vec4.dot(this.planes[i], vec) < 0.0 ? 1 : 0;
+		// x_h, y_l, z_h
+		vec4.set(vec, box[3], box[1], box[5], 1.0);
+		out += vec4.dot(this.planes[i], vec) < 0.0 ? 1 : 0;
+		// x_l, y_h, z_h
+		vec4.set(vec, box[0], box[4], box[5], 1.0);
+		out += vec4.dot(this.planes[i], vec) < 0.0 ? 1 : 0;
+		// x_h, y_h, z_h
+		vec4.set(vec, box[3], box[4], box[5], 1.0);
+		out += vec4.dot(this.planes[i], vec) < 0.0 ? 1 : 0;
+
+		if (out == 8) {
+			return false;
+		}
+	}
+
+	// Test the frustum against the box
+	out = 0;
+	for (var i = 0; i < 8; ++i) {
+		out += this.points[i][0] > box[3] ? 1 : 0;
+	}
+	if (out == 8) {
+		return false;
+	}
+
+	out = 0;
+	for (var i = 0; i < 8; ++i) {
+		out += this.points[i][0] < box[0] ? 1 : 0;
+	}
+	if (out == 8) {
+		return false;
+	}
+
+	out = 0;
+	for (var i = 0; i < 8; ++i) {
+		out += this.points[i][1] > box[4] ? 1 : 0;
+	}
+	if (out == 8) {
+		return false;
+	}
+
+	out = 0;
+	for (var i = 0; i < 8; ++i) {
+		out += this.points[i][1] < box[1] ? 1 : 0;
+	}
+	if (out == 8) {
+		return false;
+	}
+
+	out = 0;
+	for (var i = 0; i < 8; ++i) {
+		out += this.points[i][2] > box[5] ? 1 : 0;
+	}
+	if (out == 8) {
+		return false;
+	}
+
+	out = 0;
+	for (var i = 0; i < 8; ++i) {
+		out += this.points[i][2] < box[2] ? 1 : 0;
+	}
+	if (out == 8) {
+		return false;
+	}
+	return true;
+}
+
+
+/* The arcball camera will be placed at the position 'eye', rotating
+ * around the point 'center', with the up vector 'up'. 'screenDims'
+ * should be the dimensions of the canvas or region taking mouse input
+ * so the mouse positions can be normalized into [-1, 1] from the pixel
+ * coordinates.
+ */
+var ArcballCamera = function(eye, center, up, zoomSpeed, screenDims) {
+	var veye = vec3.set(vec3.create(), eye[0], eye[1], eye[2]);
+	var vcenter = vec3.set(vec3.create(), center[0], center[1], center[2]);
+	var vup = vec3.set(vec3.create(), up[0], up[1], up[2]);
+	vec3.normalize(vup, vup);
+
+	var zAxis = vec3.sub(vec3.create(), vcenter, veye);
+	var viewDist = vec3.len(zAxis);
+	vec3.normalize(zAxis, zAxis);
+	
+	var xAxis = vec3.cross(vec3.create(), zAxis, vup);
+	vec3.normalize(xAxis, xAxis);
+
+	var yAxis = vec3.cross(vec3.create(), xAxis, zAxis);
+	vec3.normalize(yAxis, yAxis);
+
+	vec3.cross(xAxis, zAxis, yAxis);
+	vec3.normalize(xAxis, xAxis);
+
 	this.zoomSpeed = zoomSpeed;
 	this.invScreen = [1.0 / screenDims[0], 1.0 / screenDims[1]];
 
 	this.centerTranslation = mat4.fromTranslation(mat4.create(), center);
 	mat4.invert(this.centerTranslation, this.centerTranslation);
-	var vt = vec3.set(vec3.create(), 0, 0, -1.0);
+
+	var vt = vec3.set(vec3.create(), 0, 0, -1.0 * viewDist);
 	this.translation = mat4.fromTranslation(mat4.create(), vt);
-	this.rotation = quat.create();
+
+	var rotMat = mat3.fromValues(xAxis[0], xAxis[1], xAxis[2],
+		yAxis[0], yAxis[1], yAxis[2],
+		-zAxis[0], -zAxis[1], -zAxis[2]);
+	mat3.transpose(rotMat, rotMat);
+	this.rotation = quat.fromMat3(quat.create(), rotMat);
+	quat.normalize(this.rotation, this.rotation);
 
 	this.camera = mat4.create();
 	this.invCamera = mat4.create();
@@ -98,7 +283,81 @@ var pointDist = function(a, b) {
 	return Math.sqrt(Math.pow(v[0], 2.0) + Math.pow(v[1], 2.0));
 }
 
-'use strict';
+var Shader = function(vertexSrc, fragmentSrc) {
+	var self = this;
+	this.program = compileShader(vertexSrc, fragmentSrc);
+
+	var regexUniform = /uniform[^;]+[ ](\w+);/g
+	var matchUniformName = /uniform[^;]+[ ](\w+);/
+
+	this.uniforms = {};
+
+	var vertexUnifs = vertexSrc.match(regexUniform);
+	var fragUnifs = fragmentSrc.match(regexUniform);
+
+	if (vertexUnifs) {
+		vertexUnifs.forEach(function(unif) {
+			var m = unif.match(matchUniformName);
+			self.uniforms[m[1]] = -1;
+		});
+	}
+	if (fragUnifs) {
+		fragUnifs.forEach(function(unif) {
+			var m = unif.match(matchUniformName);
+			self.uniforms[m[1]] = -1;
+		});
+	}
+
+	for (var unif in this.uniforms) {
+		this.uniforms[unif] = gl.getUniformLocation(this.program, unif);
+	}
+}
+
+Shader.prototype.use = function() {
+	gl.useProgram(this.program);
+}
+
+// Compile and link the shaders vert and frag. vert and frag should contain
+// the shader source code for the vertex and fragment shaders respectively
+// Returns the compiled and linked program, or null if compilation or linking failed
+var compileShader = function(vert, frag){
+	var vs = gl.createShader(gl.VERTEX_SHADER);
+	gl.shaderSource(vs, vert);
+	gl.compileShader(vs);
+	if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)){
+		alert("Vertex shader failed to compile, see console for log");
+		console.log(gl.getShaderInfoLog(vs));
+		return null;
+	}
+
+	var fs = gl.createShader(gl.FRAGMENT_SHADER);
+	gl.shaderSource(fs, frag);
+	gl.compileShader(fs);
+	if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)){
+		alert("Fragment shader failed to compile, see console for log");
+		console.log(gl.getShaderInfoLog(fs));
+		return null;
+	}
+
+	var program = gl.createProgram();
+	gl.attachShader(program, vs);
+	gl.attachShader(program, fs);
+	gl.linkProgram(program);
+	if (!gl.getProgramParameter(program, gl.LINK_STATUS)){
+		alert("Shader failed to link, see console for log");
+		console.log(gl.getProgramInfoLog(program));
+		return null;
+	}
+	return program;
+}
+
+var getGLExtension = function(ext) {
+	if (!gl.getExtension(ext)) {
+		alert("Missing " + ext + " WebGL extension");
+		return false;
+	}
+	return true;
+}
 
 var Buffer = function(capacity, dtype) {
 	this.len = 0;
@@ -127,7 +386,14 @@ Buffer.prototype.clear = function(buf) {
 	this.len = 0;
 }
 
-'use strict';
+// Various utilities that don't really fit anywhere else
+var hexToRGB = function(hex) {
+	var val = parseInt(hex.substr(1), 16);
+	var r = (val >> 16) & 255;
+	var g = (val >> 8) & 255;
+	var b = val & 255;
+	return [r, g, b];
+}
 
 /* The controller can register callbacks for various events on a canvas:
  *
@@ -302,95 +568,5 @@ Controller.prototype.registerForCanvas = function(canvas) {
 	}
 	canvas.addEventListener("touchcancel", touchEnd);
 	canvas.addEventListener("touchend", touchEnd);
-}
-
-'use strict';
-
-var Shader = function(vertexSrc, fragmentSrc) {
-	var self = this;
-	this.program = compileShader(vertexSrc, fragmentSrc);
-
-	var regexUniform = /uniform[^;]+[ ](\w+);/g
-	var matchUniformName = /uniform[^;]+[ ](\w+);/
-
-	this.uniforms = {};
-
-	var vertexUnifs = vertexSrc.match(regexUniform);
-	var fragUnifs = fragmentSrc.match(regexUniform);
-
-	if (vertexUnifs) {
-		vertexUnifs.forEach(function(unif) {
-			var m = unif.match(matchUniformName);
-			self.uniforms[m[1]] = -1;
-		});
-	}
-	if (fragUnifs) {
-		fragUnifs.forEach(function(unif) {
-			var m = unif.match(matchUniformName);
-			self.uniforms[m[1]] = -1;
-		});
-	}
-
-	for (var unif in this.uniforms) {
-		this.uniforms[unif] = gl.getUniformLocation(this.program, unif);
-	}
-}
-
-Shader.prototype.use = function() {
-	gl.useProgram(this.program);
-}
-
-// Compile and link the shaders vert and frag. vert and frag should contain
-// the shader source code for the vertex and fragment shaders respectively
-// Returns the compiled and linked program, or null if compilation or linking failed
-var compileShader = function(vert, frag){
-	var vs = gl.createShader(gl.VERTEX_SHADER);
-	gl.shaderSource(vs, vert);
-	gl.compileShader(vs);
-	if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)){
-		alert("Vertex shader failed to compile, see console for log");
-		console.log(gl.getShaderInfoLog(vs));
-		return null;
-	}
-
-	var fs = gl.createShader(gl.FRAGMENT_SHADER);
-	gl.shaderSource(fs, frag);
-	gl.compileShader(fs);
-	if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)){
-		alert("Fragment shader failed to compile, see console for log");
-		console.log(gl.getShaderInfoLog(fs));
-		return null;
-	}
-
-	var program = gl.createProgram();
-	gl.attachShader(program, vs);
-	gl.attachShader(program, fs);
-	gl.linkProgram(program);
-	if (!gl.getProgramParameter(program, gl.LINK_STATUS)){
-		alert("Shader failed to link, see console for log");
-		console.log(gl.getProgramInfoLog(program));
-		return null;
-	}
-	return program;
-}
-
-var getGLExtension = function(ext) {
-	if (!gl.getExtension(ext)) {
-		alert("Missing " + ext + " WebGL extension");
-		return false;
-	}
-	return true;
-}
-
-'use strict';
-
-// Various utilities that don't really fit anywhere else
-
-var hexToRGB = function(hex) {
-	var val = parseInt(hex.substr(1), 16);
-	var r = (val >> 16) & 255;
-	var g = (val >> 8) & 255;
-	var b = val & 255;
-	return [r, g, b];
 }
 

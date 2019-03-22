@@ -50,7 +50,10 @@ var mousePos = null;
 var targetFrameTime = 32;
 var WIDTH = 640;
 var HEIGHT = 480;
-const center = vec3.set(vec3.create(), 0.0, 0.0, 0.0);
+
+const defaultEye = vec3.set(vec3.create(), 0.5, 0.5, 1.5);
+const center = vec3.set(vec3.create(), 0.5, 0.5, 0.5);
+const up = vec3.set(vec3.create(), 0.0, 1.0, 0.0);
 
 var pointClouds = {
 	"Dinosaur": {
@@ -203,7 +206,7 @@ var selectPointCloud = function() {
 
 				// Reset the sampling rate and camera for new volumes
 				if (newPointCloudUpload) {
-					camera = new ArcballCamera(center, 100, [WIDTH, HEIGHT]);
+					camera = new ArcballCamera(defaultEye, center, up, 100, [WIDTH, HEIGHT]);
 					camera.zoom(-30);
 					// Pan the man down some
 					if (surfelDataset.url == pointClouds["Man"].url) {
@@ -299,14 +302,6 @@ var selectPointCloud = function() {
 	});
 }
 
-var hexToRGB = function(hex) {
-	var val = parseInt(hex.substr(1), 16);
-	var r = (val >> 16) & 255;
-	var g = (val >> 8) & 255;
-	var b = val & 255;
-	return [r, g, b];
-}
-
 var fillColor = function() {
 	var brushColor = hexToRGB(brushColorPicker.value);
 	for (var i = 0; i < numSurfels; ++i) {
@@ -384,7 +379,7 @@ window.onload = function() {
 		WIDTH / HEIGHT, 0.1, 500);
 	projView = mat4.create();
 
-	camera = new ArcballCamera(center, 2, [WIDTH, HEIGHT]);
+	camera = new ArcballCamera(defaultEye, center, up, 2, [WIDTH, HEIGHT]);
 
 	var paintSurface = function(mouse, evt) {
 		mousePos = mouse;
