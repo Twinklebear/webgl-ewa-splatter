@@ -220,7 +220,7 @@ var selectPointCloud = function() {
 				}
 				projView = mat4.mul(projView, proj, camera.camera);
 
-				splatShader.use();
+				splatShader.use(gl);
 				gl.uniformMatrix4fv(splatShader.uniforms["proj_view"], false, projView);
 				gl.uniform3fv(splatShader.uniforms["eye_pos"], camera.eyePos());
 				gl.uniform1f(splatShader.uniforms["radius_scale"], splatRadiusSlider.value);
@@ -243,7 +243,7 @@ var selectPointCloud = function() {
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 				gl.disable(gl.BLEND);
-				normalizationPassShader.use();
+				normalizationPassShader.use(gl);
 				var eyeDir = camera.eyeDir();
 				gl.uniform3fv(normalizationPassShader.uniforms["eye_dir"], eyeDir);
 				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -269,7 +269,7 @@ var selectPointCloud = function() {
 						var brushColor = hexToRGB(brushColorPicker.value);
 						gl.disable(gl.DEPTH_TEST);
 
-						brushShader.use();
+						brushShader.use(gl);
 						gl.uniformMatrix4fv(brushShader.uniforms["proj_view"], false, projView);
 						gl.uniform3f(brushShader.uniforms["brush_pos"], hitP[0], hitP[1], hitP[2]);
 						gl.uniform3f(brushShader.uniforms["brush_normal"],
@@ -451,14 +451,14 @@ window.onload = function() {
 	gl.enableVertexAttribArray(0);
 	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
-	splatShader = new Shader(vertShader, fragShader);
+	splatShader = new Shader(gl, vertShader, fragShader);
 
-	normalizationPassShader = new Shader(quadVertShader, normalizationFragShader);
-	normalizationPassShader.use();
+	normalizationPassShader = new Shader(gl, quadVertShader, normalizationFragShader);
+	normalizationPassShader.use(gl);
 	gl.uniform1i(normalizationPassShader.uniforms["splat_colors"], 0)
 	gl.uniform1i(normalizationPassShader.uniforms["splat_normals"], 1)
 
-	brushShader = new Shader(brushVertShader, brushFragShader);
+	brushShader = new Shader(gl, brushVertShader, brushFragShader);
 
 	// Setup the render targets for the splat rendering pass
 	splatRenderTargets = [gl.createTexture(), gl.createTexture(), gl.createTexture()];
