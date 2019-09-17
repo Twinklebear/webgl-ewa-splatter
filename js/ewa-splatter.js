@@ -367,7 +367,7 @@ window.onload = function() {
 		alert("Unable to initialize WebGL2. Your browser may not support it");
 		return;
 	}
-	if (!getGLExtension("OES_texture_float_linear") || !getGLExtension("EXT_color_buffer_float")) {
+	if (!getGLExtension(gl, "OES_texture_float_linear") || !getGLExtension(gl, "EXT_color_buffer_float")) {
 		alert("Required WebGL extensions missing, aborting");
 		return;
 	}

@@ -222,7 +222,7 @@ var compileShader = function(gl, vert, frag){
     return program;
 }
 
-var getGLExtension = function(ext) {
+var getGLExtension = function(gl, ext) {
     if (!gl.getExtension(ext)) {
         alert("Missing " + ext + " WebGL extension");
         return false;
