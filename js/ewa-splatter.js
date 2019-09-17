@@ -367,9 +367,13 @@ window.onload = function() {
 		alert("Unable to initialize WebGL2. Your browser may not support it");
 		return;
 	}
-	if (!getGLExtension(gl, "OES_texture_float_linear") || !getGLExtension(gl, "EXT_color_buffer_float")) {
-		alert("Required WebGL extensions missing, aborting");
-		return;
+
+    var extensions = ["EXT_color_buffer_float", "EXT_float_blend"];
+    for (var i = 0; i < extensions.length; ++i) {
+        if (!getGLExtension(gl, extensions[i])) {
+            alert("Required WebGL extensions missing (" + extensions[i] + "), aborting");
+            return;
+        }
 	}
 
 	WIDTH = canvas.width;
