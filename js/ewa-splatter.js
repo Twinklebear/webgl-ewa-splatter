@@ -57,31 +57,31 @@ const up = vec3.set(vec3.create(), 0.0, 1.0, 0.0);
 
 var pointClouds = {
 	"Dinosaur": {
-		url: "e4l0qdy43ttvb87/dinosaur_kd.rsf",
+		url: "dinosaur_kd.rsf",
 		size: 2448388,
 	},
 	"Leo": {
-		url: "k78e3vzl97tir7y/leo_kd.rsf",
+		url: "leo_kd.rsf",
 		size: 2501144,
 	},
 	"Santa": {
-		url: "8ktn1ac8v2dxhui/painted_santa_kd.rsf",
+		url: "painted_santa_kd.rsf",
 		size: 3265940,
 	},
 	"Igea": {
-		url: "f7h4m35crhs4lnj/igea_kd.rsf",
+		url: "igea_kd.rsf",
 		size: 5805644,
 	},
 	"Man": {
-		url: "bwbhyri4iexxrvm/man_kd.rsf",
+		url: "man_kd.rsf",
 		size: 6345236,
 	},
 	"Sankt Johann": {
-		url: "af12ofenxidqa67/Sankt_Johann_B2_kd.rsf",
+		url: "Sankt_Johann_B2_kd.rsf",
 		size: 10568784,
 	},
 	"Warnock Engineering Building": {
-		url: "cd7trfzevc1s9js/utah_cs_bldg_kd.rsf",
+		url: "utah_cs_bldg_kd.rsf",
 		size: 12437888,
 	}
 };
@@ -98,7 +98,7 @@ var loadPointCloud = function(dataset, onload) {
 	};
 
 	if (!dataset.file) {
-		var url = "https://www.dl.dropboxusercontent.com/s/" + dataset.url + "?dl=1";
+		var url = "https://cdn.willusher.io/ewa-demo-data/" + dataset.url;
 		if (dataset.testing) {
 			url = dataset.url;
 		}
@@ -206,8 +206,8 @@ var selectPointCloud = function() {
 
 				// Reset the sampling rate and camera for new volumes
 				if (newPointCloudUpload) {
-					camera = new ArcballCamera(defaultEye, center, up, 100, [WIDTH, HEIGHT]);
-					camera.zoom(-30);
+					camera = new ArcballCamera(defaultEye, center, up, 1, [WIDTH, HEIGHT]);
+					camera.zoom(-5000);
 					// Pan the man down some
 					if (surfelDataset.url == pointClouds["Man"].url) {
 						camera.pan([0, -HEIGHT/2]);
@@ -383,7 +383,7 @@ window.onload = function() {
 		WIDTH / HEIGHT, 0.1, 500);
 	projView = mat4.create();
 
-	camera = new ArcballCamera(defaultEye, center, up, 2, [WIDTH, HEIGHT]);
+	camera = new ArcballCamera(defaultEye, center, up, 1, [WIDTH, HEIGHT]);
 
 	var paintSurface = function(mouse, evt) {
 		mousePos = mouse;
